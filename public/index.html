@@ -1,18 +1,413 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 
 <head>
 	<meta charset="UTF-8">
-	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet"
-		integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="styles.css">
-	<title> Masked Calling Demo </title>
+	<title>マスクドコーリング ライブダッシュボード</title>
 </head>
 
-<body class="center">
-	<h1> Masked Calling Demo </h1>
-	<p>Test numbers to dial: +...</p>
-	<p>Destination number: +...</p>
+<body>
+	<main class="layout">
+		<section class="panel">
+			<h1>マスクドコーリング ライブダッシュボード</h1>
+			<p class="subtitle">着信のルーティング結果と通話ステータスをリアルタイム表示します。</p>
+			<div class="status-row">
+				<span id="connection-badge" class="badge offline">未接続</span>
+				<span id="updated-at">最終更新: -</span>
+			</div>
+		</section>
+
+		<section class="panel">
+			<h2>番号マッピング</h2>
+			<p class="subtitle">既存の転送先を編集し、新しい番号ペアを追加できます。</p>
+			<form id="mapping-form" class="mapping-form">
+				<label>
+					<span>着信番号</span>
+					<input id="mapping-source" name="source" type="tel" placeholder="+81 3 1234 5678" required>
+				</label>
+				<label>
+					<span>転送先番号</span>
+					<input id="mapping-destination" name="destination" type="tel" placeholder="+81 90 1234 5678" required>
+				</label>
+				<button type="submit" class="primary-btn">追加</button>
+			</form>
+			<p id="mapping-feedback" class="form-feedback muted">CSV に保存されると、次回以降もこの設定が使われます。</p>
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>着信番号</th>
+						<th>転送先番号</th>
+						<th>操作</th>
+					</tr>
+				</thead>
+				<tbody id="mapping-table-body">
+					<tr>
+						<td colspan="3" class="muted">番号マッピングを読み込み中...</td>
+					</tr>
+				</tbody>
+			</table>
+		</section>
+
+		<section class="panel">
+			<h2>ライブ通話ステータス</h2>
+			<div class="table-wrap">
+				<table class="data-table" id="call-table">
+					<thead>
+						<tr>
+							<th>更新時刻</th>
+							<th>発信者 (元の発信番号)</th>
+							<th>着信先 (元の着信番号)</th>
+							<th>転送先</th>
+							<th>ルート</th>
+							<th>ステータス</th>
+							<th>詳細</th>
+						</tr>
+					</thead>
+					<tbody id="call-table-body">
+						<tr>
+							<td colspan="7" class="muted">通話イベント待機中...</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</main>
+
+	<div id="error-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="error-title">
+		<div class="modal-card">
+			<div class="modal-head">
+				<h3 id="error-title">失敗詳細</h3>
+				<button id="modal-close" class="modal-close" type="button" aria-label="閉じる">×</button>
+			</div>
+			<div class="modal-body">
+				<p id="error-summary" class="modal-summary"></p>
+				<pre id="error-json" class="modal-json"></pre>
+				<div class="modal-help">
+					<h4>Vonage への問い合わせ方法</h4>
+					<p>以下を添えてサポートに連絡してください。</p>
+					<ul>
+						<li>Call UUID / Conversation UUID</li>
+						<li>Status / Detail / SIP Code</li>
+						<li>発生時刻 (UTC)</li>
+						<li>発信元・着信先番号とルーティング情報</li>
+						<li>Application ID: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		const connectionBadge = document.getElementById('connection-badge');
+		const updatedAt = document.getElementById('updated-at');
+		const callTableBody = document.getElementById('call-table-body');
+		const mappingTableBody = document.getElementById('mapping-table-body');
+		const mappingForm = document.getElementById('mapping-form');
+		const mappingSourceInput = document.getElementById('mapping-source');
+		const mappingDestinationInput = document.getElementById('mapping-destination');
+		const mappingFeedback = document.getElementById('mapping-feedback');
+		const errorModal = document.getElementById('error-modal');
+		const modalClose = document.getElementById('modal-close');
+		const errorSummary = document.getElementById('error-summary');
+		const errorJson = document.getElementById('error-json');
+		let latestCalls = [];
+		let latestMappings = [];
+
+		const normalizePhone = (value) => {
+			if (!value) return '';
+			const digitsOnly = String(value).trim().replace(/\D/g, '');
+			return digitsOnly ? `+${digitsOnly}` : '';
+		};
+
+		const escapeHtml = (value) => String(value)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
+
+		const isSuccessStatus = (status) => {
+			const value = String(status || '').toLowerCase();
+			return value === 'completed' || value === 'answered';
+		};
+
+		const statusClass = (status) => {
+			const value = String(status || '').toLowerCase();
+			if (value === 'failed' || value === 'rejected') return 'status-failed';
+			if (value === 'completed' || value === 'answered') return 'status-ok';
+			if (value === 'ringing' || value === 'started' || value === 'answer_webhook') return 'status-progress';
+			return 'status-neutral';
+		};
+
+		const setConnectionState = (isConnected) => {
+			connectionBadge.textContent = isConnected ? 'ライブ接続中' : '再接続中';
+			connectionBadge.className = `badge ${isConnected ? 'online' : 'offline'}`;
+		};
+
+		const formatCell = (value) => (value === null || value === undefined || value === '') ? '-' : String(value);
+
+		const formatTime = (isoString) => {
+			if (!isoString) return '-';
+			const date = new Date(isoString);
+			if (Number.isNaN(date.getTime())) return isoString;
+			return date.toLocaleString('ja-JP', { hour12: false });
+		};
+
+		const setMappingFeedback = (message, tone = 'muted') => {
+			mappingFeedback.textContent = message;
+			mappingFeedback.className = `form-feedback ${tone}`;
+		};
+
+		const renderMappings = (mappings) => {
+			if (!Array.isArray(mappings) || mappings.length === 0) {
+				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">登録済みの番号マッピングはありません。</td></tr>';
+				return;
+			}
+
+			latestMappings = mappings;
+			mappingTableBody.innerHTML = mappings.map((mapping, index) => `
+				<tr data-mapping-index="${index}">
+					<td><input class="table-input" data-field="source" type="tel" value="${escapeHtml(mapping.source)}"></td>
+					<td><input class="table-input" data-field="destination" type="tel" value="${escapeHtml(mapping.destination)}"></td>
+					<td>
+						<div class="action-row">
+							<button type="button" class="secondary-btn" data-action="save">保存</button>
+							<button type="button" class="danger-btn" data-action="delete">削除</button>
+						</div>
+					</td>
+				</tr>
+			`).join('');
+		};
+
+		const loadMappings = async () => {
+			try {
+				const response = await fetch('/_/mappings');
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+
+				const payload = await response.json();
+				renderMappings(payload.mappings || []);
+			} catch (error) {
+				console.error('Failed to load mappings:', error);
+				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">番号マッピングを読み込めませんでした。</td></tr>';
+				setMappingFeedback('番号マッピングの取得に失敗しました。', 'error-text');
+			}
+		};
+
+		const saveMapping = async ({ originalSource = '', source, destination }) => {
+			const normalizedOriginalSource = normalizePhone(originalSource);
+			const normalizedSource = normalizePhone(source);
+			const normalizedDestination = normalizePhone(destination);
+
+			if (!normalizedSource || !normalizedDestination) {
+				setMappingFeedback('着信番号と転送先番号を正しく入力してください。', 'error-text');
+				return;
+			}
+
+			const upsertResponse = await fetch('/_/mappings', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ source: normalizedSource, destination: normalizedDestination })
+			});
+
+			if (!upsertResponse.ok) {
+				const payload = await upsertResponse.json().catch(() => ({}));
+				throw new Error(payload.error || `HTTP ${upsertResponse.status}`);
+			}
+
+			if (normalizedOriginalSource && normalizedOriginalSource !== normalizedSource) {
+				const deleteResponse = await fetch(`/_/mappings/${encodeURIComponent(normalizedOriginalSource)}`, {
+					method: 'DELETE'
+				});
+
+				if (!deleteResponse.ok) {
+					const payload = await deleteResponse.json().catch(() => ({}));
+					throw new Error(payload.error || `HTTP ${deleteResponse.status}`);
+				}
+			}
+
+			await loadMappings();
+			setMappingFeedback('番号マッピングを保存しました。', 'success-text');
+		};
+
+		const closeModal = () => {
+			errorModal.classList.add('hidden');
+		};
+
+		const openFailureModal = (call) => {
+			const summary = [
+				`Status: ${formatCell(call.status)}`,
+				`Detail: ${formatCell(call.detail)}`,
+				`SIP Code: ${formatCell(call.sipCode)}`,
+				`更新時刻: ${formatTime(call.updatedAt || call.createdAt)}`
+			].join(' | ');
+
+			errorSummary.textContent = summary;
+			errorJson.textContent = JSON.stringify(call, null, 2);
+			errorModal.classList.remove('hidden');
+		};
+
+		const renderCalls = (calls) => {
+			if (!Array.isArray(calls) || calls.length === 0) {
+				callTableBody.innerHTML = '<tr><td colspan="7" class="muted">通話イベント待機中...</td></tr>';
+				return;
+			}
+
+			latestCalls = calls.slice(0, 20);
+			callTableBody.innerHTML = latestCalls.map((call, index) => {
+				const failed = !isSuccessStatus(call.status);
+				const detailCell = failed
+					? `<button type="button" class="detail-btn" data-call-index="${index}">${formatCell(call.detail || call.sipCode || '確認')}</button>`
+					: formatCell(call.detail || call.sipCode);
+
+				return `
+				<tr>
+					<td>${formatTime(call.updatedAt || call.createdAt)}</td>
+					<td>${formatCell(call.inboundFrom)}</td>
+					<td>${formatCell(call.inboundTo)}</td>
+					<td>${formatCell(call.dialDestination || call.destination)}</td>
+					<td>${formatCell(call.routeSource)}</td>
+					<td><span class="status-pill ${statusClass(call.status)}">${formatCell(call.status)}</span></td>
+					<td>${detailCell}</td>
+				</tr>
+			`;
+			}).join('');
+		};
+
+		const applyState = (state) => {
+			if (!state || typeof state !== 'object') return;
+			updatedAt.textContent = `最終更新: ${formatTime(state.now)}`;
+			renderCalls(state.calls);
+		};
+
+		const loadInitialState = async () => {
+			try {
+				const response = await fetch('/_/debug/live-state');
+				if (!response.ok) return;
+				const state = await response.json();
+				applyState(state);
+			} catch (error) {
+				console.error('Failed to load initial state:', error);
+			}
+		};
+
+		const subscribeLive = () => {
+			const stream = new EventSource('/_/debug/live');
+
+			stream.addEventListener('open', () => {
+				setConnectionState(true);
+			});
+
+			stream.addEventListener('snapshot', (event) => {
+				try {
+					applyState(JSON.parse(event.data));
+				} catch (error) {
+					console.error('Invalid snapshot payload:', error);
+				}
+			});
+
+			stream.addEventListener('update', (event) => {
+				try {
+					applyState(JSON.parse(event.data));
+				} catch (error) {
+					console.error('Invalid update payload:', error);
+				}
+			});
+
+			stream.addEventListener('error', () => {
+				setConnectionState(false);
+			});
+		};
+
+		callTableBody.addEventListener('click', (event) => {
+			const button = event.target.closest('.detail-btn');
+			if (!button) return;
+
+			const index = Number(button.dataset.callIndex);
+			const call = latestCalls[index];
+			if (!call) return;
+			openFailureModal(call);
+		});
+
+		mappingForm.addEventListener('submit', async (event) => {
+			event.preventDefault();
+
+			try {
+				await saveMapping({
+					source: mappingSourceInput.value,
+					destination: mappingDestinationInput.value
+				});
+				mappingForm.reset();
+				mappingSourceInput.focus();
+			} catch (error) {
+				console.error('Failed to create mapping:', error);
+				setMappingFeedback(`保存に失敗しました: ${error.message}`, 'error-text');
+			}
+		});
+
+		mappingTableBody.addEventListener('click', async (event) => {
+			const button = event.target.closest('button[data-action]');
+			if (!button) return;
+
+			const row = button.closest('tr[data-mapping-index]');
+			if (!row) return;
+
+			const index = Number(row.dataset.mappingIndex);
+			const mapping = latestMappings[index];
+			if (!mapping) return;
+
+			const sourceInput = row.querySelector('input[data-field="source"]');
+			const destinationInput = row.querySelector('input[data-field="destination"]');
+			if (!sourceInput || !destinationInput) return;
+
+			try {
+				if (button.dataset.action === 'save') {
+					await saveMapping({
+						originalSource: mapping.source,
+						source: sourceInput.value,
+						destination: destinationInput.value
+					});
+					return;
+				}
+
+				const response = await fetch(`/_/mappings/${encodeURIComponent(mapping.source)}`, {
+					method: 'DELETE'
+				});
+
+				if (!response.ok) {
+					const payload = await response.json().catch(() => ({}));
+					throw new Error(payload.error || `HTTP ${response.status}`);
+				}
+
+				await loadMappings();
+				setMappingFeedback('番号マッピングを削除しました。', 'success-text');
+			} catch (error) {
+				console.error('Failed to update mapping:', error);
+				setMappingFeedback(`更新に失敗しました: ${error.message}`, 'error-text');
+			}
+		});
+
+		modalClose.addEventListener('click', closeModal);
+		errorModal.addEventListener('click', (event) => {
+			if (event.target === errorModal) {
+				closeModal();
+			}
+		});
+
+		window.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') {
+				closeModal();
+			}
+		});
+
+		loadInitialState();
+		loadMappings();
+		subscribeLive();
+	</script>
 </body>
 
 </html>
