@@ -7,13 +7,8 @@ application-id: APPLICATION_ID
 Change the value of `APPLICATION_ID` to the Vonage application id.
 
 ## Changing destination number
-Under vcr.yml, for this part:
-```
-environment:
-    - name: DEST_NUMBER
-        value: 00000000
-```
-Change the value of `00000000` to the destination number.
+Update `number-mapping.csv` with source and destination pairs in E.164 format.
+If an inbound number has no mapping, the app returns a fallback message and does not attempt to connect.
 
 ## VCR Deployment
 View the [deploying guide](https://developer.vonage.com/vcr/guides/deploying) to learn more about deploying on Vonage Cloud Runtime.# multiple-redirect-demo

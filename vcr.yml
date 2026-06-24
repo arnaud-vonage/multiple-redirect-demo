@@ -1,0 +1,21 @@
+project:
+    name: masked-calling-modified
+instance:
+    name: dev
+    runtime: nodejs22
+    region: aws.apse1
+    application-id: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8
+    capabilities:
+        - voice
+    entrypoint:
+        - node
+        - index.js
+debug:
+    name: debug
+    application-id: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8
+    capabilities:
+        - voice
+    entrypoint:
+        - nodemon
+        - --inspect
+        - index.js

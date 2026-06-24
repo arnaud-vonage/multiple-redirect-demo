@@ -5,7 +5,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const app = express();
 const port = process.env.VCR_PORT;
 
-const DEST_NUMBER = process.env.DEST_NUMBER;
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
 
@@ -203,12 +202,11 @@ app.post('/answer', async (req, res) => {
     const { to, from, uuid, conversation_uuid: conversationUuid } = req.body;
     const normalizedTo = normalizePhone(to);
     const mappedDestination = numberMappings.get(normalizedTo);
-    const fallbackDestination = normalizePhone(DEST_NUMBER);
-    const destination = mappedDestination || fallbackDestination;
-    const outboundFrom = normalizePhone(VONAGE_NUMBER) || fallbackDestination;
+    const destination = mappedDestination || '';
+    const outboundFrom = normalizePhone(VONAGE_NUMBER) || normalizedTo;
     const dialDestination = toDialablePhone(destination);
     const dialFrom = toDialablePhone(outboundFrom);
-    const routeSource = mappedDestination ? 'mapping' : 'fallback';
+    const routeSource = mappedDestination ? 'mapping' : 'unmapped';
 
     console.log(`/answer | normalizedTo=${normalizedTo} | destination=${destination} | dialDestination=${dialDestination} | routeSource=${routeSource}`);
     appendRecentEvent({
