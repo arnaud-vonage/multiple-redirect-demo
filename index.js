@@ -364,6 +364,8 @@ app.post('/answer', async (req, res) => {
     const normalizedTo = normalizePhone(to);
     const mappedDestination = numberMappings.get(normalizedTo);
     const destination = mappedDestination || '';
+    const webhookBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const connectEventUrl = `${webhookBaseUrl}/${eventCallbackPath}`;
     const outboundFrom = normalizePhone(VONAGE_NUMBER);
     const dialDestination = toDialablePhone(destination);
     const dialFrom = toDialablePhone(outboundFrom);
@@ -412,7 +414,7 @@ app.post('/answer', async (req, res) => {
                 "number": dialDestination
             }],
             // Explicit event callback for connect leg updates and failures.
-            "eventUrl": [eventCallbackPath],
+            "eventUrl": [connectEventUrl],
             "eventMethod": "POST"
         };
 
