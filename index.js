@@ -11,7 +11,6 @@ app.set('trust proxy', true);
 
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN;
 const WEBHOOK_SIGNATURE_SECRET = process.env.WEBHOOK_SIGNATURE_SECRET;
 const ENABLE_DEBUG_ROUTES = process.env.ENABLE_DEBUG_ROUTES === 'true';
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
@@ -67,36 +66,37 @@ const requireAdminAuth = (req, res, next) => {
 
 const isValidSignedWebhook = (req) => {
     if (!WEBHOOK_SIGNATURE_SECRET) {
+        console.log('[DEBUG] isValidSignedWebhook: WEBHOOK_SIGNATURE_SECRET not configured');
         return false;
     }
 
     const signedJwt = getBearerToken(req);
     if (!signedJwt) {
+        console.log('[DEBUG] isValidSignedWebhook: No Bearer token found in Authorization header');
         return false;
     }
 
-    return verifySignature(signedJwt, WEBHOOK_SIGNATURE_SECRET);
+    const isValid = verifySignature(signedJwt, WEBHOOK_SIGNATURE_SECRET);
+    console.log(`[DEBUG] isValidSignedWebhook: JWT verification result = ${isValid}`);
+    return isValid;
 };
 
 const requireWebhookAuth = (req, res, next) => {
+    console.log(`[DEBUG] requireWebhookAuth: Authorization header = ${req.get('authorization') || 'none'}`);
+    
     if (isValidSignedWebhook(req)) {
+        console.log('[DEBUG] requireWebhookAuth: Passed JWT verification');
         next();
         return;
     }
 
-    if (WEBHOOK_TOKEN) {
-        const token = req.get('x-webhook-token') || req.query?.token;
-        if (token === WEBHOOK_TOKEN) {
-            next();
-            return;
-        }
-    }
-
-    if (!WEBHOOK_SIGNATURE_SECRET && !WEBHOOK_TOKEN) {
+    if (!WEBHOOK_SIGNATURE_SECRET) {
+        console.log('[DEBUG] requireWebhookAuth: WEBHOOK_SIGNATURE_SECRET not configured, returning 503');
         res.status(503).json({ error: 'webhook auth is not configured' });
         return;
     }
 
+    console.log('[DEBUG] requireWebhookAuth: JWT verification failed, returning 401');
     res.status(401).json({ error: 'unauthorized' });
 };
 
@@ -237,10 +237,9 @@ const broadcastLiveUpdate = () => {
 const session = vcr.createSession();
 const voice = new Voice(session);
 
-const webhookQuery = WEBHOOK_TOKEN ? `?token=${encodeURIComponent(WEBHOOK_TOKEN)}` : '';
-const eventCallbackPath = `event${webhookQuery}`;
+const eventCallbackPath = 'event';
 
-await voice.onCall(`answer${webhookQuery}`);
+await voice.onCall('answer');
 await voice.onCallEvent({ callback: eventCallbackPath });
 
 app.use(express.json());
@@ -354,14 +353,16 @@ app.delete('/_/mappings/:source', async (req, res) => {
 });
 
 app.post('/answer', async (req, res) => {
-    let isAuthorized = false;
+    console.log('[DEBUG] /answer endpoint called');\n    let isAuthorized = false;
     requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
     if (!isAuthorized) {
+        console.log('[DEBUG] /answer: Authorization failed, returning early');
         return;
     }
+    console.log('[DEBUG] /answer: Authorization passed');
 
     const { to, from, uuid, conversation_uuid: conversationUuid } = req.body;
     const normalizedTo = normalizePhone(to);
@@ -435,14 +436,18 @@ app.post('/answer', async (req, res) => {
 });
 
 app.post('/event', async (req, res) => {
+    console.log('[DEBUG] /event endpoint called');
     let isAuthorized = false;
     requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
     if (!isAuthorized) {
+        console.log('[DEBUG] /event: Authorization failed, returning early');
         return;
     }
+    
+    console.log('[DEBUG] /event: Authorization passed');
 
     if (req.body?.status || req.body?.detail) {
         console.log(`/event | status=${req.body.status} | detail=${req.body.detail || 'n/a'}`);

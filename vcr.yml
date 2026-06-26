@@ -8,8 +8,6 @@ instance:
     capabilities:
         - voice
     environment:
-        - name: WEBHOOK_TOKEN
-          secret: WEBHOOK_TOKEN
         - name: WEBHOOK_SIGNATURE_SECRET
           secret: WEBHOOK_SIGNATURE_SECRET
         - name: ADMIN_API_KEY
@@ -17,7 +15,6 @@ instance:
         - name: ENABLE_DEBUG_ROUTES
           value: "false"
     secrets:
-        - WEBHOOK_TOKEN
         - WEBHOOK_SIGNATURE_SECRET
         - ADMIN_API_KEY
     entrypoint:
@@ -29,8 +26,6 @@ debug:
     capabilities:
         - voice
     environment:
-        - name: WEBHOOK_TOKEN
-          secret: WEBHOOK_TOKEN
         - name: WEBHOOK_SIGNATURE_SECRET
           secret: WEBHOOK_SIGNATURE_SECRET
         - name: ADMIN_API_KEY
@@ -38,7 +33,6 @@ debug:
         - name: ENABLE_DEBUG_ROUTES
           value: "true"
     secrets:
-        - WEBHOOK_TOKEN
         - WEBHOOK_SIGNATURE_SECRET
         - ADMIN_API_KEY
     entrypoint:
