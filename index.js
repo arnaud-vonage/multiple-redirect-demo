@@ -240,22 +240,12 @@ app.get('/_/debug/recent-events', async (req, res) => {
 });
 
 app.get('/_/debug/live-state', async (req, res) => {
-    if (!ENABLE_DEBUG_ROUTES) {
-        res.sendStatus(404);
-        return;
-    }
-
     requireAdminAuth(req, res, () => {
         res.json(getSanitizedLiveState());
     });
 });
 
 app.get('/_/debug/live', async (req, res) => {
-    if (!ENABLE_DEBUG_ROUTES) {
-        res.sendStatus(404);
-        return;
-    }
-
     let isAuthorized = false;
     requireAdminAuth(req, res, () => {
         isAuthorized = true;
