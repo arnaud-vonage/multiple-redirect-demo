@@ -8,14 +8,11 @@ instance:
     capabilities:
         - voice
     environment:
-        - name: WEBHOOK_SIGNATURE_SECRET
-          secret: WEBHOOK_SIGNATURE_SECRET
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
         - name: ENABLE_DEBUG_ROUTES
           value: "false"
     secrets:
-        - WEBHOOK_SIGNATURE_SECRET
         - ADMIN_API_KEY
     entrypoint:
         - node
@@ -26,14 +23,11 @@ debug:
     capabilities:
         - voice
     environment:
-        - name: WEBHOOK_SIGNATURE_SECRET
-          secret: WEBHOOK_SIGNATURE_SECRET
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
         - name: ENABLE_DEBUG_ROUTES
           value: "true"
     secrets:
-        - WEBHOOK_SIGNATURE_SECRET
         - ADMIN_API_KEY
     entrypoint:
         - nodemon

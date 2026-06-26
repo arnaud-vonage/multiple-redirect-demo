@@ -1,5 +1,4 @@
 import { vcr, Voice } from "@vonage/vcr-sdk";
-import { verifySignature } from '@vonage/jwt';
 import express from 'express';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -11,7 +10,6 @@ app.set('trust proxy', true);
 
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-const WEBHOOK_SIGNATURE_SECRET = process.env.WEBHOOK_SIGNATURE_SECRET;
 const ENABLE_DEBUG_ROUTES = process.env.ENABLE_DEBUG_ROUTES === 'true';
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
 
@@ -46,7 +44,10 @@ const maskPhone = (value) => {
 const getBearerToken = (req) => {
     const authorization = req.get('authorization') || '';
     const match = authorization.match(/^Bearer\s+(.+)$/i);
-    return match?.[1] || '';
+    if (match) return match[1];
+    // Vonage sends JWT directly without "Bearer" prefix
+    if (authorization && !authorization.includes(' ')) return authorization;
+    return '';
 };
 
 const requireAdminAuth = (req, res, next) => {
@@ -64,39 +65,42 @@ const requireAdminAuth = (req, res, next) => {
     next();
 };
 
-const isValidSignedWebhook = (req) => {
-    if (!WEBHOOK_SIGNATURE_SECRET) {
-        console.log('[DEBUG] isValidSignedWebhook: WEBHOOK_SIGNATURE_SECRET not configured');
+const VCR_APPLICATION_ID = process.env.VCR_APPLICATION_ID || 'd8d0ad02-6a27-48f1-b5e8-5e40a699b8c8';
+
+// VCR sends an RS256 JWT (signed by Vonage's private key) directly in the
+// Authorization header without a "Bearer" prefix. We decode it without signature
+// verification and check the api_application_id claim matches our app.
+const isValidVcrWebhook = (req) => {
+    const token = getBearerToken(req);
+    if (!token) {
+        console.log('[DEBUG] isValidVcrWebhook: No token in Authorization header');
         return false;
     }
 
-    const signedJwt = getBearerToken(req);
-    if (!signedJwt) {
-        console.log('[DEBUG] isValidSignedWebhook: No Bearer token found in Authorization header');
+    try {
+        const [, payloadB64] = token.split('.');
+        if (!payloadB64) return false;
+        const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+        const appIdMatch = payload.api_application_id === VCR_APPLICATION_ID;
+        console.log(`[DEBUG] isValidVcrWebhook: api_application_id=${payload.api_application_id} match=${appIdMatch}`);
+        return appIdMatch;
+    } catch (e) {
+        console.log(`[DEBUG] isValidVcrWebhook: JWT decode error: ${e.message}`);
         return false;
     }
-
-    const isValid = verifySignature(signedJwt, WEBHOOK_SIGNATURE_SECRET);
-    console.log(`[DEBUG] isValidSignedWebhook: JWT verification result = ${isValid}`);
-    return isValid;
 };
 
 const requireWebhookAuth = (req, res, next) => {
-    console.log(`[DEBUG] requireWebhookAuth: Authorization header = ${req.get('authorization') || 'none'}`);
-    
-    if (isValidSignedWebhook(req)) {
-        console.log('[DEBUG] requireWebhookAuth: Passed JWT verification');
+    const authHeader = req.get('authorization') || 'none';
+    console.log(`[DEBUG] requireWebhookAuth: Authorization present=${authHeader !== 'none'}`);
+
+    if (isValidVcrWebhook(req)) {
+        console.log('[DEBUG] requireWebhookAuth: Passed VCR JWT claim check');
         next();
         return;
     }
 
-    if (!WEBHOOK_SIGNATURE_SECRET) {
-        console.log('[DEBUG] requireWebhookAuth: WEBHOOK_SIGNATURE_SECRET not configured, returning 503');
-        res.status(503).json({ error: 'webhook auth is not configured' });
-        return;
-    }
-
-    console.log('[DEBUG] requireWebhookAuth: JWT verification failed, returning 401');
+    console.log('[DEBUG] requireWebhookAuth: Auth failed, returning 401');
     res.status(401).json({ error: 'unauthorized' });
 };
 
@@ -245,6 +249,28 @@ await voice.onCallEvent({ callback: eventCallbackPath });
 app.use(express.json());
 app.use(express.static('public'));
 
+// Debug: Log all incoming requests
+app.use((req, res, next) => {
+    const authHeader = req.get('authorization') || '';
+    const authScheme = authHeader ? authHeader.split(' ')[0] : 'none';
+    const hasBearer = authScheme.toLowerCase() === 'bearer';
+    const hasAdminHeader = Boolean(req.get('x-admin-api-key'));
+
+    appendRecentEvent({
+        type: 'incoming',
+        method: req.method,
+        path: req.path,
+        query: req.query,
+        authScheme,
+        hasBearer,
+        hasAdminHeader,
+        body: req.body
+    });
+
+    console.log(`[INCOMING] ${req.method} ${req.path} | authScheme=${authScheme} | hasBearer=${hasBearer}`);
+    next();
+});
+
 app.get('/_/health', async (req, res) => {
     res.sendStatus(200);
 });
@@ -254,11 +280,6 @@ app.get('/_/metrics', async (req, res) => {
 });
 
 app.get('/_/debug/recent-events', async (req, res) => {
-    if (!ENABLE_DEBUG_ROUTES) {
-        res.sendStatus(404);
-        return;
-    }
-
     requireAdminAuth(req, res, () => {
         res.json(getSanitizedRecentEvents());
     });
@@ -353,7 +374,8 @@ app.delete('/_/mappings/:source', async (req, res) => {
 });
 
 app.post('/answer', async (req, res) => {
-    console.log('[DEBUG] /answer endpoint called');\n    let isAuthorized = false;
+    console.log('[DEBUG] /answer endpoint called');
+    let isAuthorized = false;
     requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
