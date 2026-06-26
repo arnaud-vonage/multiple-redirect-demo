@@ -20,6 +20,7 @@ Create the VCR secrets before deploying:
 
 ```sh
 vcr secret create --name WEBHOOK_TOKEN --value YOUR_WEBHOOK_TOKEN
+vcr secret create --name WEBHOOK_SIGNATURE_SECRET --value YOUR_WEBHOOK_SIGNATURE_SECRET
 vcr secret create --name ADMIN_API_KEY --value YOUR_ADMIN_API_KEY
 ```
 
@@ -28,13 +29,16 @@ Then reference them under `environment` in `vcr.yml`:
 ```
 - name: WEBHOOK_TOKEN
   secret: WEBHOOK_TOKEN
+- name: WEBHOOK_SIGNATURE_SECRET
+  secret: WEBHOOK_SIGNATURE_SECRET
 - name: ADMIN_API_KEY
   secret: ADMIN_API_KEY
 - name: ENABLE_DEBUG_ROUTES
   value: "false"
 ```
 
-`WEBHOOK_TOKEN` is appended to the registered Vonage webhook URLs and is required by `/answer` and `/event`.
+`WEBHOOK_SIGNATURE_SECRET` verifies Vonage-signed webhook JWTs from the Authorization header (preferred).
+`WEBHOOK_TOKEN` remains enabled as a compatibility fallback for token-based auth on `/answer` and `/event`.
 `ADMIN_API_KEY` is required to access `/_/mappings` and any enabled `/_/debug/*` route using either the `x-admin-api-key` header or `Authorization: Bearer ...`.
 Leave `ENABLE_DEBUG_ROUTES` set to `false` in deployed environments unless you explicitly need the debug endpoints.
 For local `vcr debug`, export development values in your shell or source a local `.env` file before starting the debugger.

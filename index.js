@@ -1,4 +1,5 @@
 import { vcr, Voice } from "@vonage/vcr-sdk";
+import { verifySignature } from '@vonage/jwt';
 import express from 'express';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -8,6 +9,7 @@ const port = process.env.VCR_PORT;
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN;
+const WEBHOOK_SIGNATURE_SECRET = process.env.WEBHOOK_SIGNATURE_SECRET;
 const ENABLE_DEBUG_ROUTES = process.env.ENABLE_DEBUG_ROUTES === 'true';
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
 
@@ -60,19 +62,39 @@ const requireAdminAuth = (req, res, next) => {
     next();
 };
 
+const isValidSignedWebhook = (req) => {
+    if (!WEBHOOK_SIGNATURE_SECRET) {
+        return false;
+    }
+
+    const signedJwt = getBearerToken(req);
+    if (!signedJwt) {
+        return false;
+    }
+
+    return verifySignature(signedJwt, WEBHOOK_SIGNATURE_SECRET);
+};
+
 const requireWebhookAuth = (req, res, next) => {
-    if (!WEBHOOK_TOKEN) {
+    if (isValidSignedWebhook(req)) {
+        next();
+        return;
+    }
+
+    if (WEBHOOK_TOKEN) {
+        const token = req.get('x-webhook-token') || req.query?.token;
+        if (token === WEBHOOK_TOKEN) {
+            next();
+            return;
+        }
+    }
+
+    if (!WEBHOOK_SIGNATURE_SECRET && !WEBHOOK_TOKEN) {
         res.status(503).json({ error: 'webhook auth is not configured' });
         return;
     }
 
-    const token = req.get('x-webhook-token') || req.query?.token || getBearerToken(req);
-    if (token !== WEBHOOK_TOKEN) {
-        res.status(401).json({ error: 'unauthorized' });
-        return;
-    }
-
-    next();
+    res.status(401).json({ error: 'unauthorized' });
 };
 
 const sanitizeWebhookPayload = (payload = {}) => {
