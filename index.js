@@ -235,9 +235,10 @@ const session = vcr.createSession();
 const voice = new Voice(session);
 
 const webhookQuery = WEBHOOK_TOKEN ? `?token=${encodeURIComponent(WEBHOOK_TOKEN)}` : '';
+const eventCallbackPath = `event${webhookQuery}`;
 
 await voice.onCall(`answer${webhookQuery}`);
-await voice.onCallEvent({ callback: `event${webhookQuery}` });
+await voice.onCallEvent({ callback: eventCallbackPath });
 
 app.use(express.json());
 app.use(express.static('public'));
@@ -363,7 +364,7 @@ app.post('/answer', async (req, res) => {
     const normalizedTo = normalizePhone(to);
     const mappedDestination = numberMappings.get(normalizedTo);
     const destination = mappedDestination || '';
-    const outboundFrom = normalizePhone(VONAGE_NUMBER) || normalizedTo;
+    const outboundFrom = normalizePhone(VONAGE_NUMBER);
     const dialDestination = toDialablePhone(destination);
     const dialFrom = toDialablePhone(outboundFrom);
     const routeSource = mappedDestination ? 'mapping' : 'unmapped';
@@ -404,14 +405,22 @@ app.post('/answer', async (req, res) => {
     }];
 
     if (destination) {
-        ncco.push({
+        const connectAction = {
             "action": "connect",
-            "from": dialFrom,
             "endpoint": [{
                 "type": "phone",
                 "number": dialDestination
-            }]
-        });
+            }],
+            // Explicit event callback for connect leg updates and failures.
+            "eventUrl": [eventCallbackPath],
+            "eventMethod": "POST"
+        };
+
+        if (dialFrom) {
+            connectAction.from = dialFrom;
+        }
+
+        ncco.push(connectAction);
     } else {
         ncco[0].text = "We could not route your call at this time";
     }
