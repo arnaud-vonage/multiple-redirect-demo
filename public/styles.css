@@ -132,6 +132,70 @@ h2 {
     font-size: 0.92rem;
 }
 
+.admin-auth-panel {
+    margin-top: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    padding: 14px 16px;
+}
+
+.admin-auth-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.admin-auth-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--ink);
+}
+
+.admin-auth-form {
+    margin: 10px 0;
+    display: grid;
+    gap: 10px;
+}
+
+.admin-auth-form label {
+    display: grid;
+    gap: 6px;
+}
+
+.admin-auth-form label span {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.admin-auth-form input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--ink);
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.admin-auth-form input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
+}
+
+.admin-auth-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-auth-buttons button {
+    flex: 1;
+}
+
 .table-wrap {
     overflow-x: auto;
 }

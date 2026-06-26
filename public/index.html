@@ -17,6 +17,23 @@
 				<span id="connection-badge" class="badge offline">未接続</span>
 				<span id="updated-at">最終更新: -</span>
 			</div>
+			<div class="admin-auth-panel">
+				<div class="admin-auth-header">
+					<h3>認証</h3>
+					<span id="admin-auth-status-badge" class="badge offline">未認証</span>
+				</div>
+				<form id="admin-auth-form" class="admin-auth-form">
+					<label>
+						<span>Admin API Key</span>
+						<input id="admin-api-key" name="adminApiKey" type="password" placeholder="管理用 API キーを入力">
+					</label>
+					<div class="admin-auth-buttons">
+						<button type="submit" class="primary-btn">保存・接続</button>
+						<button type="button" id="admin-auth-clear" class="secondary-btn">クリア</button>
+					</div>
+				</form>
+				<p id="admin-auth-feedback" class="form-feedback muted">管理系 API とデバッグ画面を開くには Admin API Key が必要です。</p>
+			</div>
 		</section>
 
 		<section class="panel">
@@ -104,6 +121,11 @@
 		const updatedAt = document.getElementById('updated-at');
 		const callTableBody = document.getElementById('call-table-body');
 		const mappingTableBody = document.getElementById('mapping-table-body');
+		const adminAuthForm = document.getElementById('admin-auth-form');
+		const adminApiKeyInput = document.getElementById('admin-api-key');
+		const adminAuthFeedback = document.getElementById('admin-auth-feedback');
+		const adminAuthClearBtn = document.getElementById('admin-auth-clear');
+		const adminAuthStatusBadge = document.getElementById('admin-auth-status-badge');
 		const mappingForm = document.getElementById('mapping-form');
 		const mappingSourceInput = document.getElementById('mapping-source');
 		const mappingDestinationInput = document.getElementById('mapping-destination');
@@ -114,6 +136,8 @@
 		const errorJson = document.getElementById('error-json');
 		let latestCalls = [];
 		let latestMappings = [];
+		let liveStream;
+		const ADMIN_API_KEY_STORAGE = 'masked-calling-admin-api-key';
 
 		const normalizePhone = (value) => {
 			if (!value) return '';
@@ -159,6 +183,62 @@
 			mappingFeedback.className = `form-feedback ${tone}`;
 		};
 
+		const setAdminFeedback = (message, tone = 'muted') => {
+			adminAuthFeedback.textContent = message;
+			adminAuthFeedback.className = `form-feedback ${tone}`;
+		};
+
+		const getAdminApiKey = () => localStorage.getItem(ADMIN_API_KEY_STORAGE) || '';
+
+		const setAdminApiKey = (value) => {
+			const trimmed = String(value || '').trim();
+			if (trimmed) {
+				localStorage.setItem(ADMIN_API_KEY_STORAGE, trimmed);
+				updateAdminAuthUI();
+			} else {
+				localStorage.removeItem(ADMIN_API_KEY_STORAGE);
+				updateAdminAuthUI();
+			}
+		};
+
+		const updateAdminAuthUI = () => {
+			const savedKey = getAdminApiKey();
+			if (savedKey) {
+				adminAuthStatusBadge.textContent = '認証済み';
+				adminAuthStatusBadge.className = 'badge online';
+				adminApiKeyInput.value = savedKey;
+			} else {
+				adminAuthStatusBadge.textContent = '未認証';
+				adminAuthStatusBadge.className = 'badge offline';
+				adminApiKeyInput.value = '';
+			}
+		};
+
+		const buildAdminUrl = (path) => {
+			const url = new URL(path, window.location.origin);
+			const adminApiKey = getAdminApiKey();
+
+			if (adminApiKey) {
+				url.searchParams.set('adminKey', adminApiKey);
+			}
+
+			return url.toString();
+		};
+
+		const fetchAdmin = async (path, options = {}) => {
+			const adminApiKey = getAdminApiKey();
+			const headers = new Headers(options.headers || {});
+
+			if (adminApiKey) {
+				headers.set('x-admin-api-key', adminApiKey);
+			}
+
+			return fetch(path, {
+				...options,
+				headers
+			});
+		};
+
 		const renderMappings = (mappings) => {
 			if (!Array.isArray(mappings) || mappings.length === 0) {
 				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">登録済みの番号マッピングはありません。</td></tr>';
@@ -182,7 +262,7 @@
 
 		const loadMappings = async () => {
 			try {
-				const response = await fetch('/_/mappings');
+				const response = await fetchAdmin('/_/mappings');
 				if (!response.ok) {
 					throw new Error(`HTTP ${response.status}`);
 				}
@@ -193,6 +273,9 @@
 				console.error('Failed to load mappings:', error);
 				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">番号マッピングを読み込めませんでした。</td></tr>';
 				setMappingFeedback('番号マッピングの取得に失敗しました。', 'error-text');
+				if (error.message.includes('401')) {
+					setAdminFeedback('Admin API Key が正しくありません。', 'error-text');
+				}
 			}
 		};
 
@@ -206,7 +289,7 @@
 				return;
 			}
 
-			const upsertResponse = await fetch('/_/mappings', {
+			const upsertResponse = await fetchAdmin('/_/mappings', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -220,7 +303,7 @@
 			}
 
 			if (normalizedOriginalSource && normalizedOriginalSource !== normalizedSource) {
-				const deleteResponse = await fetch(`/_/mappings/${encodeURIComponent(normalizedOriginalSource)}`, {
+				const deleteResponse = await fetchAdmin(`/_/mappings/${encodeURIComponent(normalizedOriginalSource)}`, {
 					method: 'DELETE'
 				});
 
@@ -286,7 +369,7 @@
 
 		const loadInitialState = async () => {
 			try {
-				const response = await fetch('/_/debug/live-state');
+				const response = await fetchAdmin('/_/debug/live-state');
 				if (!response.ok) return;
 				const state = await response.json();
 				applyState(state);
@@ -296,13 +379,17 @@
 		};
 
 		const subscribeLive = () => {
-			const stream = new EventSource('/_/debug/live');
+			if (liveStream) {
+				liveStream.close();
+			}
 
-			stream.addEventListener('open', () => {
+			liveStream = new EventSource(buildAdminUrl('/_/debug/live'));
+
+			liveStream.addEventListener('open', () => {
 				setConnectionState(true);
 			});
 
-			stream.addEventListener('snapshot', (event) => {
+			liveStream.addEventListener('snapshot', (event) => {
 				try {
 					applyState(JSON.parse(event.data));
 				} catch (error) {
@@ -310,7 +397,7 @@
 				}
 			});
 
-			stream.addEventListener('update', (event) => {
+			liveStream.addEventListener('update', (event) => {
 				try {
 					applyState(JSON.parse(event.data));
 				} catch (error) {
@@ -318,10 +405,29 @@
 				}
 			});
 
-			stream.addEventListener('error', () => {
+			liveStream.addEventListener('error', () => {
 				setConnectionState(false);
 			});
 		};
+
+		adminAuthForm.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			setAdminApiKey(adminApiKeyInput.value);
+			setAdminFeedback('Admin API Key を保存しました。接続を更新します。', 'success-text');
+			await loadInitialState();
+			await loadMappings();
+			subscribeLive();
+		});
+
+		adminAuthClearBtn.addEventListener('click', async (event) => {
+			event.preventDefault();
+			setAdminApiKey('');
+			setAdminFeedback('Admin API Key をクリアしました。', 'muted');
+			adminApiKeyInput.focus();
+			await loadInitialState();
+			await loadMappings();
+			subscribeLive();
+		});
 
 		callTableBody.addEventListener('click', (event) => {
 			const button = event.target.closest('.detail-btn');
@@ -374,7 +480,7 @@
 					return;
 				}
 
-				const response = await fetch(`/_/mappings/${encodeURIComponent(mapping.source)}`, {
+				const response = await fetchAdmin(`/_/mappings/${encodeURIComponent(mapping.source)}`, {
 					method: 'DELETE'
 				});
 
@@ -404,6 +510,7 @@
 			}
 		});
 
+		updateAdminAuthUI();
 		loadInitialState();
 		loadMappings();
 		subscribeLive();

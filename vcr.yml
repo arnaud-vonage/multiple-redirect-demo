@@ -7,6 +7,16 @@ instance:
     application-id: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8
     capabilities:
         - voice
+    environment:
+        - name: WEBHOOK_TOKEN
+          secret: WEBHOOK_TOKEN
+        - name: ADMIN_API_KEY
+          secret: ADMIN_API_KEY
+        - name: ENABLE_DEBUG_ROUTES
+          value: "false"
+    secrets:
+        - WEBHOOK_TOKEN
+        - ADMIN_API_KEY
     entrypoint:
         - node
         - index.js
@@ -15,6 +25,16 @@ debug:
     application-id: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8
     capabilities:
         - voice
+    environment:
+        - name: WEBHOOK_TOKEN
+          secret: WEBHOOK_TOKEN
+        - name: ADMIN_API_KEY
+          secret: ADMIN_API_KEY
+        - name: ENABLE_DEBUG_ROUTES
+          value: "true"
+    secrets:
+        - WEBHOOK_TOKEN
+        - ADMIN_API_KEY
     entrypoint:
         - nodemon
         - --inspect

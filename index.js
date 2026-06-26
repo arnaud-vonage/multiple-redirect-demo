@@ -6,6 +6,9 @@ const app = express();
 const port = process.env.VCR_PORT;
 
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
+const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN;
+const ENABLE_DEBUG_ROUTES = process.env.ENABLE_DEBUG_ROUTES === 'true';
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
 
 const normalizePhone = (value) => {
@@ -24,6 +27,92 @@ const normalizePhone = (value) => {
 };
 
 const toDialablePhone = (value) => normalizePhone(value).replace(/^\+/, '');
+
+const maskPhone = (value) => {
+    const normalized = normalizePhone(value);
+
+    if (!normalized) {
+        return null;
+    }
+
+    const visibleDigits = normalized.slice(-4);
+    return `***${visibleDigits}`;
+};
+
+const getBearerToken = (req) => {
+    const authorization = req.get('authorization') || '';
+    const match = authorization.match(/^Bearer\s+(.+)$/i);
+    return match?.[1] || '';
+};
+
+const requireAdminAuth = (req, res, next) => {
+    if (!ADMIN_API_KEY) {
+        res.status(503).json({ error: 'admin api is not configured' });
+        return;
+    }
+
+    const token = req.get('x-admin-api-key') || req.query?.adminKey || getBearerToken(req);
+    if (token !== ADMIN_API_KEY) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+    }
+
+    next();
+};
+
+const requireWebhookAuth = (req, res, next) => {
+    if (!WEBHOOK_TOKEN) {
+        res.status(503).json({ error: 'webhook auth is not configured' });
+        return;
+    }
+
+    const token = req.get('x-webhook-token') || req.query?.token || getBearerToken(req);
+    if (token !== WEBHOOK_TOKEN) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+    }
+
+    next();
+};
+
+const sanitizeWebhookPayload = (payload = {}) => {
+    const sanitized = { ...payload };
+
+    if ('from' in sanitized) {
+        sanitized.from = maskPhone(sanitized.from);
+    }
+
+    if ('to' in sanitized) {
+        sanitized.to = maskPhone(sanitized.to);
+    }
+
+    return sanitized;
+};
+
+const sanitizeCallRecord = (record) => ({
+    ...record,
+    inboundFrom: maskPhone(record.inboundFrom),
+    inboundTo: maskPhone(record.inboundTo),
+    destination: maskPhone(record.destination),
+    dialDestination: maskPhone(record.dialDestination),
+    outboundFrom: maskPhone(record.outboundFrom),
+    dialFrom: maskPhone(record.dialFrom)
+});
+
+const getSanitizedLiveState = () => ({
+    now: new Date().toISOString(),
+    calls: callRecords.map(sanitizeCallRecord)
+});
+
+const getSanitizedRecentEvents = () => recentEvents.map((event) => ({
+    ...event,
+    normalizedTo: maskPhone(event.normalizedTo),
+    destination: maskPhone(event.destination),
+    dialDestination: maskPhone(event.dialDestination),
+    outboundFrom: maskPhone(event.outboundFrom),
+    dialFrom: maskPhone(event.dialFrom),
+    body: sanitizeWebhookPayload(event.body)
+}));
 
 const loadNumberMappings = () => {
     const mappingCsv = readFileSync(mappingFile, 'utf8');
@@ -114,7 +203,7 @@ const writeSseEvent = (res, eventName, data) => {
 };
 
 const broadcastLiveUpdate = () => {
-    const liveState = getLiveState();
+    const liveState = getSanitizedLiveState();
     for (const client of sseClients) {
         writeSseEvent(client, 'update', liveState);
     }
@@ -123,8 +212,10 @@ const broadcastLiveUpdate = () => {
 const session = vcr.createSession();
 const voice = new Voice(session);
 
-await voice.onCall('answer');
-await voice.onCallEvent({ callback: "event" });
+const webhookQuery = WEBHOOK_TOKEN ? `?token=${encodeURIComponent(WEBHOOK_TOKEN)}` : '';
+
+await voice.onCall(`answer${webhookQuery}`);
+await voice.onCallEvent({ callback: `event${webhookQuery}` });
 
 app.use(express.json());
 app.use(express.static('public'));
@@ -138,21 +229,49 @@ app.get('/_/metrics', async (req, res) => {
 });
 
 app.get('/_/debug/recent-events', async (req, res) => {
-    res.json(recentEvents);
+    if (!ENABLE_DEBUG_ROUTES) {
+        res.sendStatus(404);
+        return;
+    }
+
+    requireAdminAuth(req, res, () => {
+        res.json(getSanitizedRecentEvents());
+    });
 });
 
 app.get('/_/debug/live-state', async (req, res) => {
-    res.json(getLiveState());
+    if (!ENABLE_DEBUG_ROUTES) {
+        res.sendStatus(404);
+        return;
+    }
+
+    requireAdminAuth(req, res, () => {
+        res.json(getSanitizedLiveState());
+    });
 });
 
 app.get('/_/debug/live', async (req, res) => {
+    if (!ENABLE_DEBUG_ROUTES) {
+        res.sendStatus(404);
+        return;
+    }
+
+    let isAuthorized = false;
+    requireAdminAuth(req, res, () => {
+        isAuthorized = true;
+    });
+
+    if (!isAuthorized) {
+        return;
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
     sseClients.add(res);
-    writeSseEvent(res, 'snapshot', getLiveState());
+    writeSseEvent(res, 'snapshot', getSanitizedLiveState());
 
     req.on('close', () => {
         sseClients.delete(res);
@@ -160,10 +279,21 @@ app.get('/_/debug/live', async (req, res) => {
 });
 
 app.get('/_/mappings', async (req, res) => {
-    res.json({ mappings: listNumberMappings() });
+    requireAdminAuth(req, res, () => {
+        res.json({ mappings: listNumberMappings() });
+    });
 });
 
 app.post('/_/mappings', async (req, res) => {
+    let isAuthorized = false;
+    requireAdminAuth(req, res, () => {
+        isAuthorized = true;
+    });
+
+    if (!isAuthorized) {
+        return;
+    }
+
     const source = normalizePhone(req.body?.source);
     const destination = normalizePhone(req.body?.destination);
 
@@ -179,6 +309,15 @@ app.post('/_/mappings', async (req, res) => {
 });
 
 app.delete('/_/mappings/:source', async (req, res) => {
+    let isAuthorized = false;
+    requireAdminAuth(req, res, () => {
+        isAuthorized = true;
+    });
+
+    if (!isAuthorized) {
+        return;
+    }
+
     const source = normalizePhone(req.params.source);
 
     if (!source) {
@@ -198,7 +337,15 @@ app.delete('/_/mappings/:source', async (req, res) => {
 });
 
 app.post('/answer', async (req, res) => {
-    console.log(`/answer | req.body: ${JSON.stringify(req.body)}`);
+    let isAuthorized = false;
+    requireWebhookAuth(req, res, () => {
+        isAuthorized = true;
+    });
+
+    if (!isAuthorized) {
+        return;
+    }
+
     const { to, from, uuid, conversation_uuid: conversationUuid } = req.body;
     const normalizedTo = normalizePhone(to);
     const mappedDestination = numberMappings.get(normalizedTo);
@@ -208,7 +355,7 @@ app.post('/answer', async (req, res) => {
     const dialFrom = toDialablePhone(outboundFrom);
     const routeSource = mappedDestination ? 'mapping' : 'unmapped';
 
-    console.log(`/answer | normalizedTo=${normalizedTo} | destination=${destination} | dialDestination=${dialDestination} | routeSource=${routeSource}`);
+    console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
     appendRecentEvent({
         type: 'answer',
         normalizedTo,
@@ -260,7 +407,15 @@ app.post('/answer', async (req, res) => {
 });
 
 app.post('/event', async (req, res) => {
-    console.log(`/event | req.body: ${JSON.stringify(req.body)}`);
+    let isAuthorized = false;
+    requireWebhookAuth(req, res, () => {
+        isAuthorized = true;
+    });
+
+    if (!isAuthorized) {
+        return;
+    }
+
     if (req.body?.status || req.body?.detail) {
         console.log(`/event | status=${req.body.status} | detail=${req.body.detail || 'n/a'}`);
     }
