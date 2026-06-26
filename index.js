@@ -6,6 +6,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const app = express();
 const port = process.env.VCR_PORT;
 
+// Required behind VCR reverse proxy so req.protocol reflects external HTTPS.
+app.set('trust proxy', true);
+
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN;
@@ -364,7 +367,8 @@ app.post('/answer', async (req, res) => {
     const normalizedTo = normalizePhone(to);
     const mappedDestination = numberMappings.get(normalizedTo);
     const destination = mappedDestination || '';
-    const webhookBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+    const webhookBaseUrl = `${forwardedProto}://${req.get('host')}`;
     const connectEventUrl = `${webhookBaseUrl}/${eventCallbackPath}`;
     const outboundFrom = normalizePhone(VONAGE_NUMBER);
     const dialDestination = toDialablePhone(destination);
