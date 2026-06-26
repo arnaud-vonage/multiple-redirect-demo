@@ -196,6 +196,25 @@ h2 {
     flex: 1;
 }
 
+#admin-auth-logout-form {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-auth-authenticated-text {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--ink);
+    flex: 1;
+}
+
+#admin-auth-logout {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .table-wrap {
     overflow-x: auto;
 }

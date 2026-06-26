@@ -22,17 +22,23 @@
 					<h3>認証</h3>
 					<span id="admin-auth-status-badge" class="badge offline">未認証</span>
 				</div>
-				<form id="admin-auth-form" class="admin-auth-form">
-					<label>
-						<span>Admin API Key</span>
-						<input id="admin-api-key" name="adminApiKey" type="password" placeholder="管理用 API キーを入力">
-					</label>
-					<div class="admin-auth-buttons">
-						<button type="submit" class="primary-btn">保存・接続</button>
-						<button type="button" id="admin-auth-clear" class="secondary-btn">クリア</button>
-					</div>
-				</form>
-				<p id="admin-auth-feedback" class="form-feedback muted">管理系 API とデバッグ画面を開くには Admin API Key が必要です。</p>
+				<div id="admin-auth-input-form">
+					<form id="admin-auth-form" class="admin-auth-form">
+						<label>
+							<span>Admin API Key</span>
+							<input id="admin-api-key" name="adminApiKey" type="password" placeholder="管理用 API キーを入力">
+						</label>
+						<div class="admin-auth-buttons">
+							<button type="submit" class="primary-btn">保存・接続</button>
+							<button type="button" id="admin-auth-clear" class="secondary-btn">クリア</button>
+						</div>
+					</form>
+					<p id="admin-auth-feedback" class="form-feedback muted">管理系 API とデバッグ画面を開くには Admin API Key が必要です。</p>
+				</div>
+				<div id="admin-auth-logout-form" style="display: none;">
+					<p class="admin-auth-authenticated-text">認証済みの状態で管理機能が利用できます。</p>
+					<button type="button" id="admin-auth-logout" class="secondary-btn">ログアウト</button>
+				</div>
 			</div>
 		</section>
 
@@ -126,6 +132,9 @@
 		const adminAuthFeedback = document.getElementById('admin-auth-feedback');
 		const adminAuthClearBtn = document.getElementById('admin-auth-clear');
 		const adminAuthStatusBadge = document.getElementById('admin-auth-status-badge');
+		const adminAuthInputForm = document.getElementById('admin-auth-input-form');
+		const adminAuthLogoutForm = document.getElementById('admin-auth-logout-form');
+		const adminAuthLogoutBtn = document.getElementById('admin-auth-logout');
 		const mappingForm = document.getElementById('mapping-form');
 		const mappingSourceInput = document.getElementById('mapping-source');
 		const mappingDestinationInput = document.getElementById('mapping-destination');
@@ -206,11 +215,14 @@
 			if (savedKey) {
 				adminAuthStatusBadge.textContent = '認証済み';
 				adminAuthStatusBadge.className = 'badge online';
-				adminApiKeyInput.value = savedKey;
+				adminAuthInputForm.style.display = 'none';
+				adminAuthLogoutForm.style.display = 'flex';
 			} else {
 				adminAuthStatusBadge.textContent = '未認証';
 				adminAuthStatusBadge.className = 'badge offline';
 				adminApiKeyInput.value = '';
+				adminAuthInputForm.style.display = 'block';
+				adminAuthLogoutForm.style.display = 'none';
 			}
 		};
 
@@ -424,6 +436,15 @@
 			setAdminApiKey('');
 			setAdminFeedback('Admin API Key をクリアしました。', 'muted');
 			adminApiKeyInput.focus();
+			await loadInitialState();
+			await loadMappings();
+			subscribeLive();
+		});
+
+		adminAuthLogoutBtn.addEventListener('click', async (event) => {
+			event.preventDefault();
+			setAdminApiKey('');
+			setAdminFeedback('ログアウトしました。', 'muted');
 			await loadInitialState();
 			await loadMappings();
 			subscribeLive();
