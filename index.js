@@ -413,7 +413,7 @@ app.post('/answer', async (req, res) => {
         body: req.body
     });
 
-    const callKey = uuid || conversationUuid || `answer-${Date.now()}`;
+    const callKey = conversationUuid || uuid || `answer-${Date.now()}`;
     upsertCallRecord(callKey, {
         callUuid: uuid || null,
         conversationUuid: conversationUuid || null,
@@ -495,12 +495,12 @@ app.post('/event', async (req, res) => {
         duration
     } = req.body;
 
-    const callKey = uuid || conversationUuid || `event-${Date.now()}`;
+    const callKey = conversationUuid || uuid || `event-${Date.now()}`;
     upsertCallRecord(callKey, {
         callUuid: uuid || null,
         conversationUuid: conversationUuid || null,
-        inboundFrom: normalizePhone(from),
-        inboundTo: normalizePhone(to),
+        // Do not overwrite inboundFrom/inboundTo here — those are set from /answer
+        // and outbound leg events carry the 050/destination numbers in from/to.
         status: status || 'event',
         detail: detail || null,
         direction: direction || null,
