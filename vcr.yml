@@ -11,7 +11,7 @@ instance:
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
         - name: DESTINATION_NUMBER
-          value: +817084128651
+          value: "+81XXXXXXXXXX"
         - name: ENABLE_DEBUG_ROUTES
           value: "false"
     secrets:
