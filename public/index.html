@@ -60,7 +60,7 @@
 					</thead>
 					<tbody id="call-table-body">
 						<tr>
-							<td colspan="7" class="muted">通話イベント待機中...</td>
+							<td colspan="6" class="muted">通話イベント待機中...</td>
 						</tr>
 					</tbody>
 				</table>
@@ -223,7 +223,7 @@
 
 		const renderCalls = (calls) => {
 			if (!Array.isArray(calls) || calls.length === 0) {
-				callTableBody.innerHTML = '<tr><td colspan="7" class="muted">通話イベント待機中...</td></tr>';
+				callTableBody.innerHTML = '<tr><td colspan="6" class="muted">通話イベント待機中...</td></tr>';
 				return;
 			}
 
@@ -238,9 +238,8 @@
 				<tr>
 					<td>${formatTime(call.updatedAt || call.createdAt)}</td>
 					<td>${formatCell(call.inboundFrom)}</td>
-					<td>${formatCell(call.inboundTo)}</td>
+					<td>${formatCell(call.outboundFrom)}</td>
 					<td>${formatCell(call.dialDestination || call.destination)}</td>
-					<td>${formatCell(call.routeSource)}</td>
 					<td><span class="status-pill ${statusClass(call.status)}">${formatCell(call.status)}</span></td>
 					<td>${detailCell}</td>
 				</tr>
