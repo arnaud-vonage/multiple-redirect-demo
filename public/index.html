@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="styles.css">
-	<title>Masked Calling Dashboard</title>
+	<title>マスクドコーリング ダッシュボード</title>
 </head>
 
 <body>
@@ -16,10 +16,10 @@
 				<span class="brand-icon">📞</span>
 				<h1>Masked Calling</h1>
 			</div>
-			<p class="login-subtitle">Sign in with your Admin API Key to access the dashboard.</p>
+			<p class="login-subtitle">管理用 API キーを入力してダッシュボードにアクセスします。</p>
 			<form id="admin-auth-form" class="login-form">
-				<input id="admin-api-key" type="password" placeholder="Admin API Key" autocomplete="current-password">
-				<button type="submit" class="primary-btn">Sign in</button>
+				<input id="admin-api-key" type="password" placeholder="管理用 API キー" autocomplete="current-password">
+				<button type="submit" class="primary-btn">サインイン</button>
 			</form>
 			<p id="admin-auth-feedback" class="form-feedback muted">&nbsp;</p>
 		</div>
@@ -32,37 +32,37 @@
 				<span class="header-title">Masked Calling</span>
 			</div>
 			<nav class="header-nav">
-				<button class="nav-tab active" data-tab="home">Home</button>
-				<button class="nav-tab" data-tab="mapping">Mapping</button>
+				<button class="nav-tab active" data-tab="home">ホーム</button>
+				<button class="nav-tab" data-tab="mapping">マッピング</button>
 			</nav>
 			<div class="header-actions">
-				<span id="connection-badge" class="badge offline">Disconnected</span>
+				<span id="connection-badge" class="badge offline">未接続</span>
 				<span id="updated-at" class="updated-at"></span>
-				<button id="admin-auth-logout" class="sign-out-btn">Sign out</button>
+				<button id="admin-auth-logout" class="sign-out-btn">サインアウト</button>
 			</div>
 		</header>
 
 		<main class="app-main">
 			<div id="tab-home" class="tab-panel">
 				<div class="tab-header">
-					<h2>Live Calls</h2>
-					<p class="subtitle">Real-time call routing and status.</p>
+					<h2>ライブ通話</h2>
+					<p class="subtitle">着信のルーティング結果と通話ステータスをリアルタイム表示します。</p>
 				</div>
 				<div class="table-wrap">
 					<table class="data-table" id="call-table">
 						<thead>
 							<tr>
-								<th>Time</th>
-								<th>Caller</th>
-								<th>050 (From)</th>
-								<th>Destination</th>
-								<th>Status</th>
-								<th>Detail</th>
+								<th>更新時刻</th>
+								<th>発信者</th>
+								<th>050 (発信番号)</th>
+								<th>転送先</th>
+								<th>ステータス</th>
+								<th>詳細</th>
 							</tr>
 						</thead>
 						<tbody id="call-table-body">
 							<tr>
-								<td colspan="6" class="muted">Waiting for calls...</td>
+								<td colspan="6" class="muted">通話イベント待機中...</td>
 							</tr>
 						</tbody>
 					</table>
@@ -71,35 +71,35 @@
 
 			<div id="tab-mapping" class="tab-panel" style="display:none">
 				<div class="tab-header">
-					<h2>TF → 050 Mapping</h2>
-					<p class="subtitle">Map each inbound TF number to the 050 number used as the outbound caller ID.</p>
+					<h2>TF → 050 マッピング</h2>
+					<p class="subtitle">着信 TF 番号に対応する 050 発信番号を設定します。</p>
 				</div>
 				<div class="warning-notice">
-					⚠️ Changes made here are <strong>not persisted</strong> — the app reverts to <code>number-mapping.csv</code> on every restart. Edit the CSV file directly for permanent changes.
+					⚠️ この画面での変更はアプリの再起動時に <code>number-mapping.csv</code> の内容に戻ります。永続的な変更は CSV ファイルを直接編集してください。
 				</div>
 				<form id="mapping-form" class="mapping-form">
 					<label>
-						<span>TF Number (inbound)</span>
+						<span>TF番号 (着信番号)</span>
 						<input id="mapping-source" name="source" type="tel" placeholder="+81 120 000 0000" required>
 					</label>
 					<label>
-						<span>050 Number (outbound from)</span>
+						<span>050番号 (発信番号)</span>
 						<input id="mapping-outbound-from" name="outboundFrom" type="tel" placeholder="+81 50 0000 0000" required>
 					</label>
-					<button type="submit" class="primary-btn">Add</button>
+					<button type="submit" class="primary-btn">追加</button>
 				</form>
 				<p id="mapping-feedback" class="form-feedback muted">&nbsp;</p>
 				<table class="data-table">
 					<thead>
 						<tr>
-							<th>TF Number</th>
-							<th>050 Number</th>
-							<th>Actions</th>
+							<th>TF番号</th>
+							<th>050番号</th>
+							<th>操作</th>
 						</tr>
 					</thead>
 					<tbody id="mapping-table-body">
 						<tr>
-							<td colspan="3" class="muted">Loading mappings...</td>
+							<td colspan="3" class="muted">番号マッピングを読み込み中...</td>
 						</tr>
 					</tbody>
 				</table>
@@ -110,19 +110,19 @@
 	<div id="error-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="error-title">
 		<div class="modal-card">
 			<div class="modal-head">
-				<h3 id="error-title">Call Failure Detail</h3>
-				<button id="modal-close" class="modal-close" type="button" aria-label="Close">×</button>
+				<h3 id="error-title">通話失敗の詳細</h3>
+				<button id="modal-close" class="modal-close" type="button" aria-label="閉じる">×</button>
 			</div>
 			<div class="modal-body">
 				<p id="error-summary" class="modal-summary"></p>
 				<pre id="error-json" class="modal-json"></pre>
 				<div class="modal-help">
-					<h4>When contacting Vonage support, include:</h4>
+					<h4>Vonage サポートへの問い合わせ時に以下を添付してください:</h4>
 					<ul>
 						<li>Call UUID / Conversation UUID</li>
 						<li>Status / Detail / SIP Code</li>
-						<li>Timestamp (UTC)</li>
-						<li>Caller and destination numbers</li>
+						<li>発生時刻 (UTC)</li>
+						<li>発信元・着信先番号</li>
 						<li>Application ID: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8</li>
 					</ul>
 				</div>
@@ -189,7 +189,7 @@
 		};
 
 		const setConnectionState = (isConnected) => {
-			connectionBadge.textContent = isConnected ? 'Live' : 'Reconnecting';
+			connectionBadge.textContent = isConnected ? 'ライブ接続中' : '再接続中';
 			connectionBadge.className = `badge ${isConnected ? 'online' : 'offline'}`;
 		};
 
@@ -199,7 +199,7 @@
 			if (!isoString) return '-';
 			const date = new Date(isoString);
 			if (Number.isNaN(date.getTime())) return isoString;
-			return date.toLocaleString('en-GB', { hour12: false });
+			return date.toLocaleString('ja-JP', { hour12: false });
 		};
 
 		const setAdminFeedback = (message, tone = 'muted') => {
@@ -265,7 +265,7 @@
 
 		const renderMappings = (mappings) => {
 			if (!Array.isArray(mappings) || mappings.length === 0) {
-				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">No mappings configured.</td></tr>';
+				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">登録済みのマッピングはありません。</td></tr>';
 				return;
 			}
 			latestMappings = mappings;
@@ -275,8 +275,8 @@
 					<td><input class="table-input" data-field="outboundFrom" type="tel" value="${escapeHtml(mapping.outboundFrom)}"></td>
 					<td>
 						<div class="action-row">
-							<button type="button" class="secondary-btn" data-action="save">Save</button>
-							<button type="button" class="danger-btn" data-action="delete">Delete</button>
+							<button type="button" class="secondary-btn" data-action="save">保存</button>
+							<button type="button" class="danger-btn" data-action="delete">削除</button>
 						</div>
 					</td>
 				</tr>
@@ -291,8 +291,8 @@
 				renderMappings(payload.mappings || []);
 			} catch (error) {
 				console.error('Failed to load mappings:', error);
-				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">Failed to load mappings.</td></tr>';
-				setMappingFeedback('Failed to load mappings.', 'error-text');
+				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">番号マッピングを読み込めませんでした。</td></tr>';
+				setMappingFeedback('番号マッピングの取得に失敗しました。', 'error-text');
 			}
 		};
 
@@ -302,7 +302,7 @@
 			const normalizedOutboundFrom = normalizePhone(outboundFrom);
 
 			if (!normalizedSource || !normalizedOutboundFrom) {
-				setMappingFeedback('Enter valid TF and 050 numbers.', 'error-text');
+				setMappingFeedback('TF番号と050番号を正しく入力してください。', 'error-text');
 				return;
 			}
 
@@ -326,7 +326,7 @@
 			}
 
 			await loadMappings();
-			setMappingFeedback('Mapping saved.', 'success-text');
+			setMappingFeedback('マッピングを保存しました。', 'success-text');
 		};
 
 		const openFailureModal = (call) => {
@@ -342,14 +342,14 @@
 
 		const renderCalls = (calls) => {
 			if (!Array.isArray(calls) || calls.length === 0) {
-				callTableBody.innerHTML = '<tr><td colspan="6" class="muted">Waiting for calls...</td></tr>';
+				callTableBody.innerHTML = '<tr><td colspan="6" class="muted">通話イベント待機中...</td></tr>';
 				return;
 			}
 			latestCalls = calls.slice(0, 20);
 			callTableBody.innerHTML = latestCalls.map((call, index) => {
 				const failed = !isSuccessStatus(call.status);
 				const detailCell = failed
-					? `<button type="button" class="detail-btn" data-call-index="${index}">${formatCell(call.detail || call.sipCode || 'View')}</button>`
+					? `<button type="button" class="detail-btn" data-call-index="${index}">${formatCell(call.detail || call.sipCode || '確認')}</button>`
 					: formatCell(call.detail || call.sipCode);
 				return `
 				<tr>
@@ -365,7 +365,7 @@
 
 		const applyState = (state) => {
 			if (!state || typeof state !== 'object') return;
-			updatedAt.textContent = `Updated ${formatTime(state.now)}`;
+			updatedAt.textContent = `最終更新: ${formatTime(state.now)}`;
 			renderCalls(state.calls);
 		};
 
@@ -391,7 +391,7 @@
 		adminAuthForm.addEventListener('submit', async (event) => {
 			event.preventDefault();
 			setAdminApiKey(adminApiKeyInput.value);
-			setAdminFeedback('Connecting…', 'muted');
+			setAdminFeedback('接続中…', 'muted');
 			await loadInitialState();
 			await loadMappings();
 			subscribeLive();
@@ -416,7 +416,7 @@
 				mappingSourceInput.focus();
 			} catch (error) {
 				console.error('Failed to create mapping:', error);
-				setMappingFeedback(`Save failed: ${error.message}`, 'error-text');
+				setMappingFeedback(`保存に失敗しました: ${error.message}`, 'error-text');
 			}
 		});
 
@@ -441,10 +441,10 @@
 					throw new Error(payload.error || `HTTP ${response.status}`);
 				}
 				await loadMappings();
-				setMappingFeedback('Mapping deleted.', 'success-text');
+				setMappingFeedback('マッピングを削除しました。', 'success-text');
 			} catch (error) {
 				console.error('Failed to update mapping:', error);
-				setMappingFeedback(`Update failed: ${error.message}`, 'error-text');
+				setMappingFeedback(`更新に失敗しました: ${error.message}`, 'error-text');
 			}
 		});
 
