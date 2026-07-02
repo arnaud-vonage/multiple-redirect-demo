@@ -10,6 +10,8 @@ instance:
     environment:
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
+        - name: DESTINATION_NUMBER
+          value: +817084128651
         - name: ENABLE_DEBUG_ROUTES
           value: "false"
     secrets:
@@ -25,6 +27,8 @@ debug:
     environment:
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
+        - name: DESTINATION_NUMBER
+          value: ""
         - name: ENABLE_DEBUG_ROUTES
           value: "true"
     secrets:

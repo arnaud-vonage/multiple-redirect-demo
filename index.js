@@ -1,6 +1,5 @@
 import { vcr, Voice } from "@vonage/vcr-sdk";
 import express from 'express';
-import { readFileSync, writeFileSync } from 'node:fs';
 
 const app = express();
 const port = process.env.VCR_PORT;
@@ -9,9 +8,9 @@ const port = process.env.VCR_PORT;
 app.set('trust proxy', true);
 
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
+const DESTINATION_NUMBER = process.env.DESTINATION_NUMBER;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 const ENABLE_DEBUG_ROUTES = process.env.ENABLE_DEBUG_ROUTES === 'true';
-const mappingFile = new URL('./number-mapping.csv', import.meta.url);
 
 const normalizePhone = (value) => {
     if (!value) {
@@ -143,43 +142,7 @@ const getSanitizedRecentEvents = () => recentEvents.map((event) => ({
     body: sanitizeWebhookPayload(event.body)
 }));
 
-const loadNumberMappings = () => {
-    const mappingCsv = readFileSync(mappingFile, 'utf8');
-    const mappings = new Map();
 
-    for (const line of mappingCsv.split(/\r?\n/)) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine || trimmedLine.startsWith('#')) {
-            continue;
-        }
-
-        const [sourceRaw, destinationRaw] = trimmedLine.split(',').map((item) => item?.trim());
-        const source = normalizePhone(sourceRaw);
-        const destination = normalizePhone(destinationRaw);
-
-        if (!source || !destination) {
-            continue;
-        }
-
-        mappings.set(source, destination);
-    }
-
-    return mappings;
-};
-
-const listNumberMappings = () => Array.from(numberMappings.entries())
-    .sort(([sourceA], [sourceB]) => sourceA.localeCompare(sourceB))
-    .map(([source, destination]) => ({ source, destination }));
-
-const persistNumberMappings = () => {
-    const csv = listNumberMappings()
-        .map(({ source, destination }) => `${source},${destination}`)
-        .join('\n');
-
-    writeFileSync(mappingFile, `${csv}${csv ? '\n' : ''}`, 'utf8');
-};
-
-const numberMappings = loadNumberMappings();
 const recentEvents = [];
 const MAX_RECENT_EVENTS = 50;
 const callRecords = [];
@@ -315,64 +278,6 @@ app.get('/_/debug/live', async (req, res) => {
     });
 });
 
-app.get('/_/mappings', async (req, res) => {
-    requireAdminAuth(req, res, () => {
-        res.json({ mappings: listNumberMappings() });
-    });
-});
-
-app.post('/_/mappings', async (req, res) => {
-    let isAuthorized = false;
-    requireAdminAuth(req, res, () => {
-        isAuthorized = true;
-    });
-
-    if (!isAuthorized) {
-        return;
-    }
-
-    const source = normalizePhone(req.body?.source);
-    const destination = normalizePhone(req.body?.destination);
-
-    if (!source || !destination) {
-        res.status(400).json({ error: 'source and destination must be valid phone numbers' });
-        return;
-    }
-
-    numberMappings.set(source, destination);
-    persistNumberMappings();
-
-    res.json({ mappings: listNumberMappings() });
-});
-
-app.delete('/_/mappings/:source', async (req, res) => {
-    let isAuthorized = false;
-    requireAdminAuth(req, res, () => {
-        isAuthorized = true;
-    });
-
-    if (!isAuthorized) {
-        return;
-    }
-
-    const source = normalizePhone(req.params.source);
-
-    if (!source) {
-        res.status(400).json({ error: 'source must be a valid phone number' });
-        return;
-    }
-
-    if (!numberMappings.has(source)) {
-        res.status(404).json({ error: 'mapping not found' });
-        return;
-    }
-
-    numberMappings.delete(source);
-    persistNumberMappings();
-
-    res.json({ mappings: listNumberMappings() });
-});
-
 app.post('/answer', async (req, res) => {
     console.log('[DEBUG] /answer endpoint called');
     let isAuthorized = false;
@@ -388,15 +293,14 @@ app.post('/answer', async (req, res) => {
 
     const { to, from, uuid, conversation_uuid: conversationUuid } = req.body;
     const normalizedTo = normalizePhone(to);
-    const mappedDestination = numberMappings.get(normalizedTo);
-    const destination = mappedDestination || '';
+    const destination = normalizePhone(DESTINATION_NUMBER) || '';
     const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
     const webhookBaseUrl = `${forwardedProto}://${req.get('host')}`;
     const connectEventUrl = `${webhookBaseUrl}/${eventCallbackPath}`;
-    const outboundFrom = normalizePhone(VONAGE_NUMBER) || normalizedTo;
+    const outboundFrom = normalizePhone(VONAGE_NUMBER);
     const dialDestination = toDialablePhone(destination);
     const dialFrom = toDialablePhone(outboundFrom);
-    const routeSource = mappedDestination ? 'mapping' : 'unmapped';
+    const routeSource = destination ? 'configured' : 'unconfigured';
 
     console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
     appendRecentEvent({
