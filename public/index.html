@@ -1,128 +1,128 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="styles.css">
-	<title>マスクドコーリング ライブダッシュボード</title>
+	<title>Masked Calling Dashboard</title>
 </head>
 
 <body>
-	<main class="layout">
-		<section class="panel">
-			<h1>マスクドコーリング ライブダッシュボード</h1>
-			<p class="subtitle">着信のルーティング結果と通話ステータスをリアルタイム表示します。</p>
-			<div class="status-row">
-				<span id="connection-badge" class="badge offline">未接続</span>
-				<span id="updated-at">最終更新: -</span>
-			</div>
-			<div class="admin-auth-panel">
-				<div class="admin-auth-header">
-					<h3>認証</h3>
-					<span id="admin-auth-status-badge" class="badge offline">未認証</span>
-				</div>
-				<div id="admin-auth-input-form">
-					<form id="admin-auth-form" class="admin-auth-form">
-						<label>
-							<span>Admin API Key</span>
-							<input id="admin-api-key" name="adminApiKey" type="password" placeholder="管理用 API キーを入力">
-						</label>
-						<div class="admin-auth-buttons">
-							<button type="submit" class="primary-btn">保存・接続</button>
-							<button type="button" id="admin-auth-clear" class="secondary-btn">クリア</button>
-						</div>
-					</form>
-					<p id="admin-auth-feedback" class="form-feedback muted">管理系 API とデバッグ画面を開くには Admin API Key が必要です。</p>
-				</div>
-				<div id="admin-auth-logout-form" style="display: none;">
-					<p class="admin-auth-authenticated-text">認証済みの状態で管理機能が利用できます。</p>
-					<button type="button" id="admin-auth-logout" class="secondary-btn">ログアウト</button>
-				</div>
-			</div>
-		</section>
 
-		<div id="authenticated-content" style="display:none">
-
-		<section class="panel">
-			<h2>TF → 050 マッピング</h2>
-			<p class="subtitle">着信 TF 番号に対応する 050 発信番号を設定します。</p>
-			<div class="warning-notice">
-				⚠️ この画面での変更はアプリの再起動時に <code>number-mapping.csv</code> の内容に戻ります。永続的な変更は CSV ファイルを直接編集してください。
+	<div id="login-overlay" class="login-overlay">
+		<div class="login-card">
+			<div class="login-brand">
+				<span class="brand-icon">📞</span>
+				<h1>Masked Calling</h1>
 			</div>
-			<form id="mapping-form" class="mapping-form">
-				<label>
-					<span>TF番号 (着信番号)</span>
-					<input id="mapping-source" name="source" type="tel" placeholder="+81 120 000 0000" required>
-				</label>
-				<label>
-					<span>050番号 (発信番号)</span>
-					<input id="mapping-outbound-from" name="outboundFrom" type="tel" placeholder="+81 50 0000 0000" required>
-				</label>
-				<button type="submit" class="primary-btn">追加</button>
+			<p class="login-subtitle">Sign in with your Admin API Key to access the dashboard.</p>
+			<form id="admin-auth-form" class="login-form">
+				<input id="admin-api-key" type="password" placeholder="Admin API Key" autocomplete="current-password">
+				<button type="submit" class="primary-btn">Sign in</button>
 			</form>
-			<p id="mapping-feedback" class="form-feedback muted">CSV に保存されると、次回以降もこの設定が使われます。</p>
-			<table class="data-table">
-				<thead>
-					<tr>
-						<th>TF番号</th>
-						<th>050番号</th>
-						<th>操作</th>
-					</tr>
-				</thead>
-				<tbody id="mapping-table-body">
-					<tr>
-						<td colspan="3" class="muted">番号マッピングを読み込み中...</td>
-					</tr>
-				</tbody>
-			</table>
-		</section>
+			<p id="admin-auth-feedback" class="form-feedback muted">&nbsp;</p>
+		</div>
+	</div>
 
-		<section class="panel">
-			<h2>ライブ通話ステータス</h2>
-			<div class="table-wrap">
-				<table class="data-table" id="call-table">
+	<div id="app" class="app">
+		<header class="app-header">
+			<div class="header-brand">
+				<span class="brand-icon">📞</span>
+				<span class="header-title">Masked Calling</span>
+			</div>
+			<nav class="header-nav">
+				<button class="nav-tab active" data-tab="home">Home</button>
+				<button class="nav-tab" data-tab="mapping">Mapping</button>
+			</nav>
+			<div class="header-actions">
+				<span id="connection-badge" class="badge offline">Disconnected</span>
+				<span id="updated-at" class="updated-at"></span>
+				<button id="admin-auth-logout" class="sign-out-btn">Sign out</button>
+			</div>
+		</header>
+
+		<main class="app-main">
+			<div id="tab-home" class="tab-panel">
+				<div class="tab-header">
+					<h2>Live Calls</h2>
+					<p class="subtitle">Real-time call routing and status.</p>
+				</div>
+				<div class="table-wrap">
+					<table class="data-table" id="call-table">
+						<thead>
+							<tr>
+								<th>Time</th>
+								<th>Caller</th>
+								<th>050 (From)</th>
+								<th>Destination</th>
+								<th>Status</th>
+								<th>Detail</th>
+							</tr>
+						</thead>
+						<tbody id="call-table-body">
+							<tr>
+								<td colspan="6" class="muted">Waiting for calls...</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+
+			<div id="tab-mapping" class="tab-panel" style="display:none">
+				<div class="tab-header">
+					<h2>TF → 050 Mapping</h2>
+					<p class="subtitle">Map each inbound TF number to the 050 number used as the outbound caller ID.</p>
+				</div>
+				<div class="warning-notice">
+					⚠️ Changes made here are <strong>not persisted</strong> — the app reverts to <code>number-mapping.csv</code> on every restart. Edit the CSV file directly for permanent changes.
+				</div>
+				<form id="mapping-form" class="mapping-form">
+					<label>
+						<span>TF Number (inbound)</span>
+						<input id="mapping-source" name="source" type="tel" placeholder="+81 120 000 0000" required>
+					</label>
+					<label>
+						<span>050 Number (outbound from)</span>
+						<input id="mapping-outbound-from" name="outboundFrom" type="tel" placeholder="+81 50 0000 0000" required>
+					</label>
+					<button type="submit" class="primary-btn">Add</button>
+				</form>
+				<p id="mapping-feedback" class="form-feedback muted">&nbsp;</p>
+				<table class="data-table">
 					<thead>
 						<tr>
-							<th>更新時刻</th>
-							<th>発信者 (元の発信番号)</th>
-							<th>着信先 (元の着信番号)</th>
-							<th>転送先</th>
-							<th>ルート</th>
-							<th>ステータス</th>
-							<th>詳細</th>
+							<th>TF Number</th>
+							<th>050 Number</th>
+							<th>Actions</th>
 						</tr>
 					</thead>
-					<tbody id="call-table-body">
+					<tbody id="mapping-table-body">
 						<tr>
-							<td colspan="6" class="muted">通話イベント待機中...</td>
+							<td colspan="3" class="muted">Loading mappings...</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
-		</section>
-
-		</div>
-
-	</main>
+		</main>
+	</div>
 
 	<div id="error-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="error-title">
 		<div class="modal-card">
 			<div class="modal-head">
-				<h3 id="error-title">失敗詳細</h3>
-				<button id="modal-close" class="modal-close" type="button" aria-label="閉じる">×</button>
+				<h3 id="error-title">Call Failure Detail</h3>
+				<button id="modal-close" class="modal-close" type="button" aria-label="Close">×</button>
 			</div>
 			<div class="modal-body">
 				<p id="error-summary" class="modal-summary"></p>
 				<pre id="error-json" class="modal-json"></pre>
 				<div class="modal-help">
-					<h4>Vonage への問い合わせ方法</h4>
-					<p>以下を添えてサポートに連絡してください。</p>
+					<h4>When contacting Vonage support, include:</h4>
 					<ul>
 						<li>Call UUID / Conversation UUID</li>
 						<li>Status / Detail / SIP Code</li>
-						<li>発生時刻 (UTC)</li>
-						<li>発信元・着信先番号とルーティング情報</li>
+						<li>Timestamp (UTC)</li>
+						<li>Caller and destination numbers</li>
 						<li>Application ID: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8</li>
 					</ul>
 				</div>
@@ -138,10 +138,6 @@
 		const adminAuthForm = document.getElementById('admin-auth-form');
 		const adminApiKeyInput = document.getElementById('admin-api-key');
 		const adminAuthFeedback = document.getElementById('admin-auth-feedback');
-		const adminAuthClearBtn = document.getElementById('admin-auth-clear');
-		const adminAuthStatusBadge = document.getElementById('admin-auth-status-badge');
-		const adminAuthInputForm = document.getElementById('admin-auth-input-form');
-		const adminAuthLogoutForm = document.getElementById('admin-auth-logout-form');
 		const adminAuthLogoutBtn = document.getElementById('admin-auth-logout');
 		const mappingForm = document.getElementById('mapping-form');
 		const mappingSourceInput = document.getElementById('mapping-source');
@@ -155,6 +151,17 @@
 		let latestMappings = [];
 		let liveStream;
 		const ADMIN_API_KEY_STORAGE = 'masked-calling-admin-api-key';
+
+		// Tab switching
+		document.querySelectorAll('.nav-tab').forEach(tab => {
+			tab.addEventListener('click', () => {
+				document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+				tab.classList.add('active');
+				document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+				document.getElementById(`tab-${tab.dataset.tab}`).style.display = 'block';
+				if (tab.dataset.tab === 'mapping') loadMappings();
+			});
+		});
 
 		const normalizePhone = (value) => {
 			if (!value) return '';
@@ -182,7 +189,7 @@
 		};
 
 		const setConnectionState = (isConnected) => {
-			connectionBadge.textContent = isConnected ? 'ライブ接続中' : '再接続中';
+			connectionBadge.textContent = isConnected ? 'Live' : 'Reconnecting';
 			connectionBadge.className = `badge ${isConnected ? 'online' : 'offline'}`;
 		};
 
@@ -192,7 +199,7 @@
 			if (!isoString) return '-';
 			const date = new Date(isoString);
 			if (Number.isNaN(date.getTime())) return isoString;
-			return date.toLocaleString('ja-JP', { hour12: false });
+			return date.toLocaleString('en-GB', { hour12: false });
 		};
 
 		const setAdminFeedback = (message, tone = 'muted') => {
@@ -211,67 +218,56 @@
 			const trimmed = String(value || '').trim();
 			if (trimmed) {
 				localStorage.setItem(ADMIN_API_KEY_STORAGE, trimmed);
-				updateAdminAuthUI();
 			} else {
 				localStorage.removeItem(ADMIN_API_KEY_STORAGE);
-				updateAdminAuthUI();
 			}
+			updateAdminAuthUI();
 		};
 
 		const updateAdminAuthUI = () => {
 			const savedKey = getAdminApiKey();
-			const content = document.getElementById('authenticated-content');
+			const loginOverlay = document.getElementById('login-overlay');
+			const app = document.getElementById('app');
 			if (savedKey) {
-				adminAuthStatusBadge.textContent = '認証済み';
-				adminAuthStatusBadge.className = 'badge online';
-				adminAuthInputForm.style.display = 'none';
-				adminAuthLogoutForm.style.display = 'flex';
-				content.style.display = 'block';
+				loginOverlay.style.display = 'none';
+				app.style.display = 'flex';
 			} else {
-				adminAuthStatusBadge.textContent = '未認証';
-				adminAuthStatusBadge.className = 'badge offline';
-				adminApiKeyInput.value = '';
-				adminAuthInputForm.style.display = 'block';
-				adminAuthLogoutForm.style.display = 'none';
-				content.style.display = 'none';
+				loginOverlay.style.display = 'flex';
+				app.style.display = 'none';
+				if (liveStream) {
+					liveStream.close();
+					liveStream = null;
+				}
 			}
 		};
 
 		const buildAdminUrl = (path) => {
 			const url = new URL(path, window.location.origin);
 			const adminApiKey = getAdminApiKey();
-
 			if (adminApiKey) {
 				url.searchParams.set('adminKey', adminApiKey);
 			}
-
 			return url.toString();
 		};
 
 		const fetchAdmin = async (path, options = {}) => {
 			const adminApiKey = getAdminApiKey();
+			const url = new URL(path, window.location.origin);
 			const headers = new Headers(options.headers || {});
-
 			if (adminApiKey) {
+				url.searchParams.set('adminKey', adminApiKey);
 				headers.set('x-admin-api-key', adminApiKey);
 			}
-
-			return fetch(path, {
-				...options,
-				headers
-			});
+			return fetch(url.toString(), { ...options, headers });
 		};
 
-		const closeModal = () => {
-			errorModal.classList.add('hidden');
-		};
+		const closeModal = () => errorModal.classList.add('hidden');
 
 		const renderMappings = (mappings) => {
 			if (!Array.isArray(mappings) || mappings.length === 0) {
-				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">登録済みのマッピングはありません。</td></tr>';
+				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">No mappings configured.</td></tr>';
 				return;
 			}
-
 			latestMappings = mappings;
 			mappingTableBody.innerHTML = mappings.map((mapping, index) => `
 				<tr data-mapping-index="${index}">
@@ -279,8 +275,8 @@
 					<td><input class="table-input" data-field="outboundFrom" type="tel" value="${escapeHtml(mapping.outboundFrom)}"></td>
 					<td>
 						<div class="action-row">
-							<button type="button" class="secondary-btn" data-action="save">保存</button>
-							<button type="button" class="danger-btn" data-action="delete">削除</button>
+							<button type="button" class="secondary-btn" data-action="save">Save</button>
+							<button type="button" class="danger-btn" data-action="delete">Delete</button>
 						</div>
 					</td>
 				</tr>
@@ -290,16 +286,13 @@
 		const loadMappings = async () => {
 			try {
 				const response = await fetchAdmin('/_/mappings');
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}`);
-				}
-
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const payload = await response.json();
 				renderMappings(payload.mappings || []);
 			} catch (error) {
 				console.error('Failed to load mappings:', error);
-				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">番号マッピングを読み込めませんでした。</td></tr>';
-				setMappingFeedback('番号マッピングの取得に失敗しました。', 'error-text');
+				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">Failed to load mappings.</td></tr>';
+				setMappingFeedback('Failed to load mappings.', 'error-text');
 			}
 		};
 
@@ -309,7 +302,7 @@
 			const normalizedOutboundFrom = normalizePhone(outboundFrom);
 
 			if (!normalizedSource || !normalizedOutboundFrom) {
-				setMappingFeedback('TF番号と050番号を正しく入力してください。', 'error-text');
+				setMappingFeedback('Enter valid TF and 050 numbers.', 'error-text');
 				return;
 			}
 
@@ -325,10 +318,7 @@
 			}
 
 			if (normalizedOriginalSource && normalizedOriginalSource !== normalizedSource) {
-				const deleteResponse = await fetchAdmin(`/_/mappings/${encodeURIComponent(normalizedOriginalSource)}`, {
-					method: 'DELETE'
-				});
-
+				const deleteResponse = await fetchAdmin(`/_/mappings/${encodeURIComponent(normalizedOriginalSource)}`, { method: 'DELETE' });
 				if (!deleteResponse.ok) {
 					const payload = await deleteResponse.json().catch(() => ({}));
 					throw new Error(payload.error || `HTTP ${deleteResponse.status}`);
@@ -336,35 +326,31 @@
 			}
 
 			await loadMappings();
-			setMappingFeedback('マッピングを保存しました。', 'success-text');
+			setMappingFeedback('Mapping saved.', 'success-text');
 		};
 
 		const openFailureModal = (call) => {
-			const summary = [
+			errorSummary.textContent = [
 				`Status: ${formatCell(call.status)}`,
 				`Detail: ${formatCell(call.detail)}`,
 				`SIP Code: ${formatCell(call.sipCode)}`,
-				`更新時刻: ${formatTime(call.updatedAt || call.createdAt)}`
-			].join(' | ');
-
-			errorSummary.textContent = summary;
+				`Time: ${formatTime(call.updatedAt || call.createdAt)}`
+			].join('  |  ');
 			errorJson.textContent = JSON.stringify(call, null, 2);
 			errorModal.classList.remove('hidden');
 		};
 
 		const renderCalls = (calls) => {
 			if (!Array.isArray(calls) || calls.length === 0) {
-				callTableBody.innerHTML = '<tr><td colspan="6" class="muted">通話イベント待機中...</td></tr>';
+				callTableBody.innerHTML = '<tr><td colspan="6" class="muted">Waiting for calls...</td></tr>';
 				return;
 			}
-
 			latestCalls = calls.slice(0, 20);
 			callTableBody.innerHTML = latestCalls.map((call, index) => {
 				const failed = !isSuccessStatus(call.status);
 				const detailCell = failed
-					? `<button type="button" class="detail-btn" data-call-index="${index}">${formatCell(call.detail || call.sipCode || '確認')}</button>`
+					? `<button type="button" class="detail-btn" data-call-index="${index}">${formatCell(call.detail || call.sipCode || 'View')}</button>`
 					: formatCell(call.detail || call.sipCode);
-
 				return `
 				<tr>
 					<td>${formatTime(call.updatedAt || call.createdAt)}</td>
@@ -373,14 +359,13 @@
 					<td>${formatCell(call.dialDestination || call.destination)}</td>
 					<td><span class="status-pill ${statusClass(call.status)}">${formatCell(call.status)}</span></td>
 					<td>${detailCell}</td>
-				</tr>
-			`;
+				</tr>`;
 			}).join('');
 		};
 
 		const applyState = (state) => {
 			if (!state || typeof state !== 'object') return;
-			updatedAt.textContent = `最終更新: ${formatTime(state.now)}`;
+			updatedAt.textContent = `Updated ${formatTime(state.now)}`;
 			renderCalls(state.calls);
 		};
 
@@ -388,158 +373,91 @@
 			try {
 				const response = await fetchAdmin('/_/debug/live-state');
 				if (!response.ok) return;
-				const state = await response.json();
-				applyState(state);
+				applyState(await response.json());
 			} catch (error) {
 				console.error('Failed to load initial state:', error);
 			}
 		};
 
 		const subscribeLive = () => {
-			if (liveStream) {
-				liveStream.close();
-			}
-
+			if (liveStream) liveStream.close();
 			liveStream = new EventSource(buildAdminUrl('/_/debug/live'));
-
-			liveStream.addEventListener('open', () => {
-				setConnectionState(true);
-			});
-
-			liveStream.addEventListener('snapshot', (event) => {
-				try {
-					applyState(JSON.parse(event.data));
-				} catch (error) {
-					console.error('Invalid snapshot payload:', error);
-				}
-			});
-
-			liveStream.addEventListener('update', (event) => {
-				try {
-					applyState(JSON.parse(event.data));
-				} catch (error) {
-					console.error('Invalid update payload:', error);
-				}
-			});
-
-			liveStream.addEventListener('error', () => {
-				setConnectionState(false);
-			});
+			liveStream.addEventListener('open', () => setConnectionState(true));
+			liveStream.addEventListener('snapshot', (e) => { try { applyState(JSON.parse(e.data)); } catch {} });
+			liveStream.addEventListener('update', (e) => { try { applyState(JSON.parse(e.data)); } catch {} });
+			liveStream.addEventListener('error', () => setConnectionState(false));
 		};
 
 		adminAuthForm.addEventListener('submit', async (event) => {
 			event.preventDefault();
 			setAdminApiKey(adminApiKeyInput.value);
-			setAdminFeedback('Admin API Key を保存しました。接続を更新します。', 'success-text');
+			setAdminFeedback('Connecting…', 'muted');
 			await loadInitialState();
 			await loadMappings();
 			subscribeLive();
 		});
 
-		adminAuthClearBtn.addEventListener('click', async (event) => {
-			event.preventDefault();
+		adminAuthLogoutBtn.addEventListener('click', () => {
 			setAdminApiKey('');
-			setAdminFeedback('Admin API Key をクリアしました。', 'muted');
-			adminApiKeyInput.focus();
-			await loadInitialState();
-			await loadMappings();
-			subscribeLive();
-		});
-
-		adminAuthLogoutBtn.addEventListener('click', async (event) => {
-			event.preventDefault();
-			setAdminApiKey('');
-			setAdminFeedback('ログアウトしました。', 'muted');
-			await loadInitialState();
-			await loadMappings();
-			subscribeLive();
 		});
 
 		callTableBody.addEventListener('click', (event) => {
 			const button = event.target.closest('.detail-btn');
 			if (!button) return;
-
-			const index = Number(button.dataset.callIndex);
-			const call = latestCalls[index];
-			if (!call) return;
-			openFailureModal(call);
+			const call = latestCalls[Number(button.dataset.callIndex)];
+			if (call) openFailureModal(call);
 		});
-
-		modalClose.addEventListener('click', closeModal);
 
 		mappingForm.addEventListener('submit', async (event) => {
 			event.preventDefault();
 			try {
-				await saveMapping({
-					source: mappingSourceInput.value,
-					outboundFrom: mappingOutboundFromInput.value
-				});
+				await saveMapping({ source: mappingSourceInput.value, outboundFrom: mappingOutboundFromInput.value });
 				mappingForm.reset();
 				mappingSourceInput.focus();
 			} catch (error) {
 				console.error('Failed to create mapping:', error);
-				setMappingFeedback(`保存に失敗しました: ${error.message}`, 'error-text');
+				setMappingFeedback(`Save failed: ${error.message}`, 'error-text');
 			}
 		});
 
 		mappingTableBody.addEventListener('click', async (event) => {
 			const button = event.target.closest('button[data-action]');
 			if (!button) return;
-
 			const row = button.closest('tr[data-mapping-index]');
 			if (!row) return;
-
-			const index = Number(row.dataset.mappingIndex);
-			const mapping = latestMappings[index];
+			const mapping = latestMappings[Number(row.dataset.mappingIndex)];
 			if (!mapping) return;
-
 			const sourceInput = row.querySelector('input[data-field="source"]');
 			const outboundFromInput = row.querySelector('input[data-field="outboundFrom"]');
 			if (!sourceInput || !outboundFromInput) return;
-
 			try {
 				if (button.dataset.action === 'save') {
-					await saveMapping({
-						originalSource: mapping.source,
-						source: sourceInput.value,
-						outboundFrom: outboundFromInput.value
-					});
+					await saveMapping({ originalSource: mapping.source, source: sourceInput.value, outboundFrom: outboundFromInput.value });
 					return;
 				}
-
-				const response = await fetchAdmin(`/_/mappings/${encodeURIComponent(mapping.source)}`, {
-					method: 'DELETE'
-				});
-
+				const response = await fetchAdmin(`/_/mappings/${encodeURIComponent(mapping.source)}`, { method: 'DELETE' });
 				if (!response.ok) {
 					const payload = await response.json().catch(() => ({}));
 					throw new Error(payload.error || `HTTP ${response.status}`);
 				}
-
 				await loadMappings();
-				setMappingFeedback('マッピングを削除しました。', 'success-text');
+				setMappingFeedback('Mapping deleted.', 'success-text');
 			} catch (error) {
 				console.error('Failed to update mapping:', error);
-				setMappingFeedback(`更新に失敗しました: ${error.message}`, 'error-text');
+				setMappingFeedback(`Update failed: ${error.message}`, 'error-text');
 			}
 		});
 
-		errorModal.addEventListener('click', (event) => {
-			if (event.target === errorModal) {
-				closeModal();
-			}
-		});
-
-		window.addEventListener('keydown', (event) => {
-			if (event.key === 'Escape') {
-				closeModal();
-			}
-		});
+		modalClose.addEventListener('click', closeModal);
+		errorModal.addEventListener('click', (e) => { if (e.target === errorModal) closeModal(); });
+		window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
 		updateAdminAuthUI();
-		loadInitialState();
-		loadMappings();
-		subscribeLive();
+		if (getAdminApiKey()) {
+			loadInitialState();
+			loadMappings();
+			subscribeLive();
+		}
 	</script>
 </body>
 
