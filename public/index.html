@@ -32,12 +32,10 @@
 				<span class="header-title">Masked Calling</span>
 			</div>
 			<nav class="header-nav">
-				<button class="nav-tab active" data-tab="home">ホーム</button>
+				<button class="nav-tab active" data-tab="home">通話履歴</button>
 				<button class="nav-tab" data-tab="mapping">マッピング</button>
 			</nav>
 			<div class="header-actions">
-				<span id="connection-badge" class="badge offline">未接続</span>
-				<span id="updated-at" class="updated-at"></span>
 				<button id="admin-auth-logout" class="sign-out-btn">サインアウト</button>
 			</div>
 		</header>
@@ -45,8 +43,12 @@
 		<main class="app-main">
 			<div id="tab-home" class="tab-panel">
 				<div class="tab-header">
-					<h2>ライブ通話</h2>
-					<p class="subtitle">着信のルーティング結果と通話ステータスをリアルタイム表示します。</p>
+					<div class="tab-header-row">
+						<h2>通話履歴</h2>
+						<span id="connection-badge" class="badge offline">未接続</span>
+						<span id="updated-at" class="updated-at"></span>
+					</div>
+					<p class="subtitle">最新 100 件の通話履歴をリアルタイムで表示します。</p>
 				</div>
 				<div class="table-wrap">
 					<table class="data-table" id="call-table">

@@ -182,7 +182,7 @@ body {
 }
 
 .updated-at {
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--muted);
     font-size: 0.8rem;
     white-space: nowrap;
 }
@@ -228,6 +228,17 @@ body {
     margin-bottom: 24px;
 }
 
+.tab-header-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.tab-header-row h2 {
+    margin: 0;
+}
+
 .tab-header h2 {
     margin: 0 0 4px;
     font-size: 1.5rem;
@@ -259,9 +270,9 @@ body {
 }
 
 .badge.offline {
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: #fee2e2;
+    color: #991b1b;
+    border: none;
 }
 
 /* ── Warning notice ────────────────────────────────── */
