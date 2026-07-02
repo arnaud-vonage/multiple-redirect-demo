@@ -42,36 +42,6 @@
 			</div>
 		</section>
 
-		<section class="panel">
-			<h2>番号マッピング</h2>
-			<p class="subtitle">既存の転送先を編集し、新しい番号ペアを追加できます。</p>
-			<form id="mapping-form" class="mapping-form">
-				<label>
-					<span>着信番号</span>
-					<input id="mapping-source" name="source" type="tel" placeholder="+81 3 1234 5678" required>
-				</label>
-				<label>
-					<span>転送先番号</span>
-					<input id="mapping-destination" name="destination" type="tel" placeholder="+81 90 1234 5678" required>
-				</label>
-				<button type="submit" class="primary-btn">追加</button>
-			</form>
-			<p id="mapping-feedback" class="form-feedback muted">CSV に保存されると、次回以降もこの設定が使われます。</p>
-			<table class="data-table">
-				<thead>
-					<tr>
-						<th>着信番号</th>
-						<th>転送先番号</th>
-						<th>操作</th>
-					</tr>
-				</thead>
-				<tbody id="mapping-table-body">
-					<tr>
-						<td colspan="3" class="muted">番号マッピングを読み込み中...</td>
-					</tr>
-				</tbody>
-			</table>
-		</section>
 
 		<section class="panel">
 			<h2>ライブ通話ステータス</h2>
@@ -126,7 +96,6 @@
 		const connectionBadge = document.getElementById('connection-badge');
 		const updatedAt = document.getElementById('updated-at');
 		const callTableBody = document.getElementById('call-table-body');
-		const mappingTableBody = document.getElementById('mapping-table-body');
 		const adminAuthForm = document.getElementById('admin-auth-form');
 		const adminApiKeyInput = document.getElementById('admin-api-key');
 		const adminAuthFeedback = document.getElementById('admin-auth-feedback');
@@ -135,24 +104,13 @@
 		const adminAuthInputForm = document.getElementById('admin-auth-input-form');
 		const adminAuthLogoutForm = document.getElementById('admin-auth-logout-form');
 		const adminAuthLogoutBtn = document.getElementById('admin-auth-logout');
-		const mappingForm = document.getElementById('mapping-form');
-		const mappingSourceInput = document.getElementById('mapping-source');
-		const mappingDestinationInput = document.getElementById('mapping-destination');
-		const mappingFeedback = document.getElementById('mapping-feedback');
 		const errorModal = document.getElementById('error-modal');
 		const modalClose = document.getElementById('modal-close');
 		const errorSummary = document.getElementById('error-summary');
 		const errorJson = document.getElementById('error-json');
 		let latestCalls = [];
-		let latestMappings = [];
 		let liveStream;
 		const ADMIN_API_KEY_STORAGE = 'masked-calling-admin-api-key';
-
-		const normalizePhone = (value) => {
-			if (!value) return '';
-			const digitsOnly = String(value).trim().replace(/\D/g, '');
-			return digitsOnly ? `+${digitsOnly}` : '';
-		};
 
 		const escapeHtml = (value) => String(value)
 			.replace(/&/g, '&amp;')
@@ -185,11 +143,6 @@
 			const date = new Date(isoString);
 			if (Number.isNaN(date.getTime())) return isoString;
 			return date.toLocaleString('ja-JP', { hour12: false });
-		};
-
-		const setMappingFeedback = (message, tone = 'muted') => {
-			mappingFeedback.textContent = message;
-			mappingFeedback.className = `form-feedback ${tone}`;
 		};
 
 		const setAdminFeedback = (message, tone = 'muted') => {
@@ -249,84 +202,6 @@
 				...options,
 				headers
 			});
-		};
-
-		const renderMappings = (mappings) => {
-			if (!Array.isArray(mappings) || mappings.length === 0) {
-				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">登録済みの番号マッピングはありません。</td></tr>';
-				return;
-			}
-
-			latestMappings = mappings;
-			mappingTableBody.innerHTML = mappings.map((mapping, index) => `
-				<tr data-mapping-index="${index}">
-					<td><input class="table-input" data-field="source" type="tel" value="${escapeHtml(mapping.source)}"></td>
-					<td><input class="table-input" data-field="destination" type="tel" value="${escapeHtml(mapping.destination)}"></td>
-					<td>
-						<div class="action-row">
-							<button type="button" class="secondary-btn" data-action="save">保存</button>
-							<button type="button" class="danger-btn" data-action="delete">削除</button>
-						</div>
-					</td>
-				</tr>
-			`).join('');
-		};
-
-		const loadMappings = async () => {
-			try {
-				const response = await fetchAdmin('/_/mappings');
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}`);
-				}
-
-				const payload = await response.json();
-				renderMappings(payload.mappings || []);
-			} catch (error) {
-				console.error('Failed to load mappings:', error);
-				mappingTableBody.innerHTML = '<tr><td colspan="3" class="muted">番号マッピングを読み込めませんでした。</td></tr>';
-				setMappingFeedback('番号マッピングの取得に失敗しました。', 'error-text');
-				if (error.message.includes('401')) {
-					setAdminFeedback('Admin API Key が正しくありません。', 'error-text');
-				}
-			}
-		};
-
-		const saveMapping = async ({ originalSource = '', source, destination }) => {
-			const normalizedOriginalSource = normalizePhone(originalSource);
-			const normalizedSource = normalizePhone(source);
-			const normalizedDestination = normalizePhone(destination);
-
-			if (!normalizedSource || !normalizedDestination) {
-				setMappingFeedback('着信番号と転送先番号を正しく入力してください。', 'error-text');
-				return;
-			}
-
-			const upsertResponse = await fetchAdmin('/_/mappings', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ source: normalizedSource, destination: normalizedDestination })
-			});
-
-			if (!upsertResponse.ok) {
-				const payload = await upsertResponse.json().catch(() => ({}));
-				throw new Error(payload.error || `HTTP ${upsertResponse.status}`);
-			}
-
-			if (normalizedOriginalSource && normalizedOriginalSource !== normalizedSource) {
-				const deleteResponse = await fetchAdmin(`/_/mappings/${encodeURIComponent(normalizedOriginalSource)}`, {
-					method: 'DELETE'
-				});
-
-				if (!deleteResponse.ok) {
-					const payload = await deleteResponse.json().catch(() => ({}));
-					throw new Error(payload.error || `HTTP ${deleteResponse.status}`);
-				}
-			}
-
-			await loadMappings();
-			setMappingFeedback('番号マッピングを保存しました。', 'success-text');
 		};
 
 		const closeModal = () => {
@@ -427,7 +302,6 @@
 			setAdminApiKey(adminApiKeyInput.value);
 			setAdminFeedback('Admin API Key を保存しました。接続を更新します。', 'success-text');
 			await loadInitialState();
-			await loadMappings();
 			subscribeLive();
 		});
 
@@ -437,7 +311,6 @@
 			setAdminFeedback('Admin API Key をクリアしました。', 'muted');
 			adminApiKeyInput.focus();
 			await loadInitialState();
-			await loadMappings();
 			subscribeLive();
 		});
 
@@ -446,7 +319,6 @@
 			setAdminApiKey('');
 			setAdminFeedback('ログアウトしました。', 'muted');
 			await loadInitialState();
-			await loadMappings();
 			subscribeLive();
 		});
 
@@ -458,64 +330,6 @@
 			const call = latestCalls[index];
 			if (!call) return;
 			openFailureModal(call);
-		});
-
-		mappingForm.addEventListener('submit', async (event) => {
-			event.preventDefault();
-
-			try {
-				await saveMapping({
-					source: mappingSourceInput.value,
-					destination: mappingDestinationInput.value
-				});
-				mappingForm.reset();
-				mappingSourceInput.focus();
-			} catch (error) {
-				console.error('Failed to create mapping:', error);
-				setMappingFeedback(`保存に失敗しました: ${error.message}`, 'error-text');
-			}
-		});
-
-		mappingTableBody.addEventListener('click', async (event) => {
-			const button = event.target.closest('button[data-action]');
-			if (!button) return;
-
-			const row = button.closest('tr[data-mapping-index]');
-			if (!row) return;
-
-			const index = Number(row.dataset.mappingIndex);
-			const mapping = latestMappings[index];
-			if (!mapping) return;
-
-			const sourceInput = row.querySelector('input[data-field="source"]');
-			const destinationInput = row.querySelector('input[data-field="destination"]');
-			if (!sourceInput || !destinationInput) return;
-
-			try {
-				if (button.dataset.action === 'save') {
-					await saveMapping({
-						originalSource: mapping.source,
-						source: sourceInput.value,
-						destination: destinationInput.value
-					});
-					return;
-				}
-
-				const response = await fetchAdmin(`/_/mappings/${encodeURIComponent(mapping.source)}`, {
-					method: 'DELETE'
-				});
-
-				if (!response.ok) {
-					const payload = await response.json().catch(() => ({}));
-					throw new Error(payload.error || `HTTP ${response.status}`);
-				}
-
-				await loadMappings();
-				setMappingFeedback('番号マッピングを削除しました。', 'success-text');
-			} catch (error) {
-				console.error('Failed to update mapping:', error);
-				setMappingFeedback(`更新に失敗しました: ${error.message}`, 'error-text');
-			}
 		});
 
 		modalClose.addEventListener('click', closeModal);
@@ -533,7 +347,6 @@
 
 		updateAdminAuthUI();
 		loadInitialState();
-		loadMappings();
 		subscribeLive();
 	</script>
 </body>
