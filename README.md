@@ -50,6 +50,8 @@ vcr app generate-keys --app-id YOUR_APPLICATION_ID
 
 このコマンドで `private.key` が生成されます。VCR が Vonage API へのアクセスに使用します。
 
+> **補足**: リージョンは `vcr configure` で設定した値が使用されます。別のリージョンを指定する場合は `--region` フラグを追加してください（例: `--region aws.euw1`）。
+
 ---
 
 ### 5. シークレットの設定
