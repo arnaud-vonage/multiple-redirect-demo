@@ -45,7 +45,7 @@ application-id: YOUR_APPLICATION_ID
 ### 4. アプリケーションキーの生成
 
 ```sh
-vcr generate application key
+vcr app generate-keys --app-id YOUR_APPLICATION_ID
 ```
 
 このコマンドで `private.key` が生成されます。VCR が Vonage API へのアクセスに使用します。
