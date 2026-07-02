@@ -42,10 +42,14 @@
 			</div>
 		</section>
 
+		<div id="authenticated-content" style="display:none">
 
 		<section class="panel">
 			<h2>TF → 050 マッピング</h2>
 			<p class="subtitle">着信 TF 番号に対応する 050 発信番号を設定します。</p>
+			<div class="warning-notice">
+				⚠️ この画面での変更はアプリの再起動時に <code>number-mapping.csv</code> の内容に戻ります。永続的な変更は CSV ファイルを直接編集してください。
+			</div>
 			<form id="mapping-form" class="mapping-form">
 				<label>
 					<span>TF番号 (着信番号)</span>
@@ -97,6 +101,9 @@
 				</table>
 			</div>
 		</section>
+
+		</div>
+
 	</main>
 
 	<div id="error-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="error-title">
@@ -213,17 +220,20 @@
 
 		const updateAdminAuthUI = () => {
 			const savedKey = getAdminApiKey();
+			const content = document.getElementById('authenticated-content');
 			if (savedKey) {
 				adminAuthStatusBadge.textContent = '認証済み';
 				adminAuthStatusBadge.className = 'badge online';
 				adminAuthInputForm.style.display = 'none';
 				adminAuthLogoutForm.style.display = 'flex';
+				content.style.display = 'block';
 			} else {
 				adminAuthStatusBadge.textContent = '未認証';
 				adminAuthStatusBadge.className = 'badge offline';
 				adminApiKeyInput.value = '';
 				adminAuthInputForm.style.display = 'block';
 				adminAuthLogoutForm.style.display = 'none';
+				content.style.display = 'none';
 			}
 		};
 

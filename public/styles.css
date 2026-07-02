@@ -100,6 +100,23 @@ h2 {
     font-size: 0.86rem;
 }
 
+.warning-notice {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border-left: 4px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+    border-radius: 4px;
+    font-size: 0.86rem;
+    line-height: 1.5;
+}
+
+.warning-notice code {
+    font-family: monospace;
+    background: rgba(0,0,0,0.12);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
 .success-text {
     color: var(--ok);
 }
