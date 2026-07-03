@@ -67,7 +67,7 @@ const requireAdminAuth = (req, res, next) => {
     next();
 };
 
-const VCR_APPLICATION_ID = process.env.VCR_APPLICATION_ID || 'd8d0ad02-6a27-48f1-b5e8-5e40a699b8c8';
+const VCR_APPLICATION_ID = process.env.VCR_APPLICATION_ID;
 
 // Vonage JWKS endpoint — public keys used to sign webhook JWTs (RS256).
 // createRemoteJWKSet caches the key set and refreshes it automatically.
@@ -86,8 +86,8 @@ const isValidVcrWebhook = async (req) => {
 
     try {
         const { payload } = await jwtVerify(token, VONAGE_JWKS, { algorithms: ['RS256'] });
-        const appIdMatch = payload.api_application_id === VCR_APPLICATION_ID;
-        console.log(`[DEBUG] isValidVcrWebhook: signature OK, api_application_id=${payload.api_application_id} match=${appIdMatch}`);
+        const appIdMatch = !VCR_APPLICATION_ID || payload.api_application_id === VCR_APPLICATION_ID;
+        console.log(`[DEBUG] isValidVcrWebhook: signature OK, api_application_id=${payload.api_application_id} match=${appIdMatch} (VCR_APPLICATION_ID=${VCR_APPLICATION_ID || 'not set'})`);
         return appIdMatch;
     } catch (e) {
         // JWSSignatureVerificationFailed = token present but signature wrong → reject.
@@ -102,7 +102,7 @@ const isValidVcrWebhook = async (req) => {
             const [, payloadB64] = token.split('.');
             if (!payloadB64) return false;
             const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
-            const appIdMatch = payload.api_application_id === VCR_APPLICATION_ID;
+            const appIdMatch = !VCR_APPLICATION_ID || payload.api_application_id === VCR_APPLICATION_ID;
             console.log(`[DEBUG] isValidVcrWebhook: claim-only fallback, api_application_id=${payload.api_application_id} match=${appIdMatch}`);
             return appIdMatch;
         } catch {
