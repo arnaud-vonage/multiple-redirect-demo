@@ -1,6 +1,7 @@
 import { vcr, Voice } from "@vonage/vcr-sdk";
 import express from 'express';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const app = express();
 const port = process.env.VCR_PORT;
@@ -68,10 +69,12 @@ const requireAdminAuth = (req, res, next) => {
 
 const VCR_APPLICATION_ID = process.env.VCR_APPLICATION_ID || 'd8d0ad02-6a27-48f1-b5e8-5e40a699b8c8';
 
-// VCR sends an RS256 JWT (signed by Vonage's private key) directly in the
-// Authorization header without a "Bearer" prefix. We decode it without signature
-// verification and check the api_application_id claim matches our app.
-const isValidVcrWebhook = (req) => {
+// Vonage JWKS endpoint — public keys used to sign webhook JWTs (RS256).
+// createRemoteJWKSet caches the key set and refreshes it automatically.
+const VONAGE_JWKS = createRemoteJWKSet(new URL('https://api.nexmo.com/.well-known/jwks.json'));
+
+// Verify the RS256 signature AND check the api_application_id claim.
+const isValidVcrWebhook = async (req) => {
     const token = getBearerToken(req);
     if (!token) {
         console.log('[DEBUG] isValidVcrWebhook: No token in Authorization header');
@@ -79,24 +82,22 @@ const isValidVcrWebhook = (req) => {
     }
 
     try {
-        const [, payloadB64] = token.split('.');
-        if (!payloadB64) return false;
-        const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+        const { payload } = await jwtVerify(token, VONAGE_JWKS, { algorithms: ['RS256'] });
         const appIdMatch = payload.api_application_id === VCR_APPLICATION_ID;
         console.log(`[DEBUG] isValidVcrWebhook: api_application_id=${payload.api_application_id} match=${appIdMatch}`);
         return appIdMatch;
     } catch (e) {
-        console.log(`[DEBUG] isValidVcrWebhook: JWT decode error: ${e.message}`);
+        console.log(`[DEBUG] isValidVcrWebhook: JWT verification failed: ${e.message}`);
         return false;
     }
 };
 
-const requireWebhookAuth = (req, res, next) => {
+const requireWebhookAuth = async (req, res, next) => {
     const authHeader = req.get('authorization') || 'none';
     console.log(`[DEBUG] requireWebhookAuth: Authorization present=${authHeader !== 'none'}`);
 
-    if (isValidVcrWebhook(req)) {
-        console.log('[DEBUG] requireWebhookAuth: Passed VCR JWT claim check');
+    if (await isValidVcrWebhook(req)) {
+        console.log('[DEBUG] requireWebhookAuth: Passed VCR JWT signature + claim check');
         next();
         return;
     }
@@ -379,7 +380,7 @@ app.delete('/_/mappings/:source', async (req, res) => {
 app.post('/answer', async (req, res) => {
     console.log('[DEBUG] /answer endpoint called');
     let isAuthorized = false;
-    requireWebhookAuth(req, res, () => {
+    await requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
@@ -463,7 +464,7 @@ app.post('/answer', async (req, res) => {
 app.post('/event', async (req, res) => {
     console.log('[DEBUG] /event endpoint called');
     let isAuthorized = false;
-    requireWebhookAuth(req, res, () => {
+    await requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
