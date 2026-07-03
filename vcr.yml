@@ -11,9 +11,9 @@ instance:
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
         - name: DESTINATION_NUMBER
-          value: "+81XXXXXXXXXX"
+          value: +817023696361
         - name: ENABLE_DEBUG_ROUTES
-          value: "false"
+          value: "true"
     secrets:
         - ADMIN_API_KEY
     entrypoint:
@@ -28,7 +28,7 @@ debug:
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
         - name: DESTINATION_NUMBER
-          value: ""
+          value: +817023696361
         - name: ENABLE_DEBUG_ROUTES
           value: "true"
     secrets:
