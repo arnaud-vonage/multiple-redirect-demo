@@ -426,7 +426,7 @@ app.post('/answer', async (req, res) => {
     const dialFrom = toDialablePhone(outboundFrom);
     const routeSource = mappedOutboundFrom ? 'mapping' : 'default';
 
-    console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
+    console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource} | connectEventUrl=${connectEventUrl}`);
     appendRecentEvent({
         type: 'answer',
         normalizedTo,
@@ -435,6 +435,7 @@ app.post('/answer', async (req, res) => {
         outboundFrom,
         dialFrom,
         routeSource,
+        connectEventUrl,
         body: req.body
     });
 
@@ -467,10 +468,8 @@ app.post('/answer', async (req, res) => {
             "endpoint": [{
                 "type": "phone",
                 "number": dialDestination
-            }],
-            // Explicit event callback for connect leg updates and failures.
-            "eventUrl": [connectEventUrl],
-            "eventMethod": "POST"
+            }]
+            // eventUrl intentionally omitted — using application's registered event URL
         };
 
         // NOTE: 'from' is temporarily disabled for diagnostics.
@@ -486,6 +485,7 @@ app.post('/answer', async (req, res) => {
         ncco[0].text = "We could not route your call at this time";
     }
 
+    console.log(`/answer | ncco=${JSON.stringify(ncco)}`);
     res.json(ncco);
 });
 
