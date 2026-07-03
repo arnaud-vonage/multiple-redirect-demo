@@ -204,7 +204,7 @@ const persistNumberMappings = () => {
 const numberMappings = loadNumberMappings();
 
 const recentEvents = [];
-const MAX_RECENT_EVENTS = 50;
+const MAX_RECENT_EVENTS = 200;
 const callRecords = [];
 const MAX_CALL_RECORDS = 100;
 const sseClients = new Set();
@@ -272,8 +272,13 @@ await voice.onCallEvent({ callback: eventCallbackPath });
 app.use(express.json());
 app.use(express.static('public'));
 
-// Debug: Log all incoming requests
+// Debug: Log all incoming requests (skip health/metrics to avoid flooding the buffer)
 app.use((req, res, next) => {
+    if (req.path === '/_/health' || req.path === '/_/metrics') {
+        next();
+        return;
+    }
+
     const authHeader = req.get('authorization') || '';
     const authScheme = authHeader ? authHeader.split(' ')[0] : 'none';
     const hasBearer = authScheme.toLowerCase() === 'bearer';
