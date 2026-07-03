@@ -473,9 +473,13 @@ app.post('/answer', async (req, res) => {
             "eventMethod": "POST"
         };
 
-        if (dialFrom) {
-            connectAction.from = dialFrom;
-        }
+        // NOTE: 'from' is temporarily disabled for diagnostics.
+        // Using the inbound TF number (03 prefix) as outbound caller ID is rejected
+        // by Vonage — the 'from' must be a Vonage virtual number with outbound capability.
+        // Uncomment once a valid outbound number is configured.
+        // if (dialFrom) {
+        //     connectAction.from = dialFrom;
+        // }
 
         ncco.push(connectAction);
     } else {
