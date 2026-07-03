@@ -34,6 +34,7 @@
 			<nav class="header-nav">
 				<button class="nav-tab active" data-tab="home">通話履歴</button>
 				<button class="nav-tab" data-tab="mapping">マッピング</button>
+				<button class="nav-tab" data-tab="logs">ログ</button>
 			</nav>
 			<div class="header-actions">
 				<button id="admin-auth-logout" class="sign-out-btn">サインアウト</button>
@@ -106,13 +107,26 @@
 					</tbody>
 				</table>
 			</div>
+
+			<div id="tab-logs" class="tab-panel" style="display:none">
+				<div class="tab-header">
+					<h2>イベントログ</h2>
+					<p class="subtitle">最新 200 件の Webhook イベント（/answer・/event）を表示します。</p>
+				</div>
+				<div style="margin-bottom:12px">
+					<button id="refresh-logs-btn" type="button" class="secondary-btn">更新</button>
+				</div>
+				<div class="table-wrap">
+					<pre id="log-content" style="padding:16px;margin:0;overflow:auto;font-size:12px;line-height:1.6;max-height:640px">ログを読み込み中...</pre>
+				</div>
+			</div>
 		</main>
 	</div>
 
 	<div id="error-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="error-title">
 		<div class="modal-card">
 			<div class="modal-head">
-				<h3 id="error-title">通話失敗の詳細</h3>
+				<h3 id="error-title">通話詳細</h3>
 				<button id="modal-close" class="modal-close" type="button" aria-label="閉じる">×</button>
 			</div>
 			<div class="modal-body">
@@ -149,6 +163,7 @@
 		const modalClose = document.getElementById('modal-close');
 		const errorSummary = document.getElementById('error-summary');
 		const errorJson = document.getElementById('error-json');
+		const logContent = document.getElementById('log-content');
 		let latestCalls = [];
 		let latestMappings = [];
 		let liveStream;
@@ -162,6 +177,7 @@
 				document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
 				document.getElementById(`tab-${tab.dataset.tab}`).style.display = 'block';
 				if (tab.dataset.tab === 'mapping') loadMappings();
+				if (tab.dataset.tab === 'logs') loadLogs();
 			});
 		});
 
@@ -185,6 +201,7 @@
 		const statusClass = (status) => {
 			const value = String(status || '').toLowerCase();
 			if (value === 'failed' || value === 'rejected') return 'status-failed';
+			if (value === 'busy') return 'status-failed';
 			if (value === 'completed' || value === 'answered') return 'status-ok';
 			if (value === 'ringing' || value === 'started' || value === 'answer_webhook') return 'status-progress';
 			return 'status-neutral';
@@ -335,7 +352,9 @@
 			errorSummary.textContent = [
 				`Status: ${formatCell(call.status)}`,
 				`Detail: ${formatCell(call.detail)}`,
-				`SIP Code: ${formatCell(call.sipCode)}`,
+				`SIP: ${formatCell(call.sipCode)}`,
+				`Dir: ${formatCell(call.direction)}`,
+				`Duration: ${call.duration ? call.duration + 's' : '-'}`,
 				`Time: ${formatTime(call.updatedAt || call.createdAt)}`
 			].join('  |  ');
 			errorJson.textContent = JSON.stringify(call, null, 2);
@@ -347,12 +366,15 @@
 				callTableBody.innerHTML = '<tr><td colspan="6" class="muted">通話イベント待機中...</td></tr>';
 				return;
 			}
-			latestCalls = calls.slice(0, 20);
+			latestCalls = calls;
 			callTableBody.innerHTML = latestCalls.map((call, index) => {
-				const failed = !isSuccessStatus(call.status);
-				const detailCell = failed
-					? `<button type="button" class="detail-btn" data-call-index="${index}">${formatCell(call.detail || call.sipCode || '確認')}</button>`
-					: formatCell(call.detail || call.sipCode);
+				const detailParts = [
+					call.detail && call.detail !== 'ncco_issued' ? escapeHtml(call.detail) : null,
+					call.sipCode ? `SIP ${call.sipCode}` : null,
+					call.duration ? `${call.duration}s` : null
+				].filter(Boolean);
+				const detailText = detailParts.join(' · ') || '-';
+				const detailCell = `<span class="detail-inline">${detailText}</span> <button type="button" class="detail-btn" data-call-index="${index}" title="JSON 詳細">▼</button>`;
 				return `
 				<tr>
 					<td>${formatTime(call.updatedAt || call.createdAt)}</td>
@@ -378,6 +400,18 @@
 				applyState(await response.json());
 			} catch (error) {
 				console.error('Failed to load initial state:', error);
+			}
+		};
+
+		const loadLogs = async () => {
+			logContent.textContent = '読み込み中...';
+			try {
+				const response = await fetchAdmin('/_/debug/recent-events');
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const events = await response.json();
+				logContent.textContent = JSON.stringify(events, null, 2);
+			} catch (error) {
+				logContent.textContent = `ログの取得に失敗しました: ${error.message}`;
 			}
 		};
 
@@ -453,6 +487,8 @@
 		modalClose.addEventListener('click', closeModal);
 		errorModal.addEventListener('click', (e) => { if (e.target === errorModal) closeModal(); });
 		window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+		document.getElementById('refresh-logs-btn').addEventListener('click', loadLogs);
 
 		updateAdminAuthUI();
 		if (getAdminApiKey()) {
