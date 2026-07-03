@@ -420,13 +420,11 @@ app.post('/answer', async (req, res) => {
     const destination = normalizePhone(DESTINATION_NUMBER) || '';
     const outboundFrom = mappedOutboundFrom || normalizePhone(VONAGE_NUMBER) || normalizedTo;
     const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
-    const webhookBaseUrl = `${forwardedProto}://${req.get('host')}`;
-    const connectEventUrl = `${webhookBaseUrl}/${eventCallbackPath}`;
     const dialDestination = toDialablePhone(destination);
     const dialFrom = toDialablePhone(outboundFrom);
     const routeSource = mappedOutboundFrom ? 'mapping' : 'default';
 
-    console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource} | connectEventUrl=${connectEventUrl}`);
+    console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
     appendRecentEvent({
         type: 'answer',
         normalizedTo,
@@ -435,7 +433,6 @@ app.post('/answer', async (req, res) => {
         outboundFrom,
         dialFrom,
         routeSource,
-        connectEventUrl,
         body: req.body
     });
 
@@ -469,23 +466,19 @@ app.post('/answer', async (req, res) => {
                 "type": "phone",
                 "number": dialDestination
             }]
-            // eventUrl intentionally omitted — using application's registered event URL
+            // eventUrl intentionally omitted — VCR's internal host header is not
+            // publicly reachable. Using the application's SDK-registered event URL instead.
         };
 
-        // NOTE: 'from' is temporarily disabled for diagnostics.
-        // Using the inbound TF number (03 prefix) as outbound caller ID is rejected
-        // by Vonage — the 'from' must be a Vonage virtual number with outbound capability.
-        // Uncomment once a valid outbound number is configured.
-        // if (dialFrom) {
-        //     connectAction.from = dialFrom;
-        // }
+        if (dialFrom) {
+            connectAction.from = dialFrom;
+        }
 
         ncco.push(connectAction);
     } else {
         ncco[0].text = "We could not route your call at this time";
     }
 
-    console.log(`/answer | ncco=${JSON.stringify(ncco)}`);
     res.json(ncco);
 });
 
