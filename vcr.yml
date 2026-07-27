@@ -4,7 +4,7 @@ instance:
     name: dev
     runtime: nodejs22
     region: aws.apse1
-    application-id: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8
+    application-id: 1dbf48c7-4ad4-4878-8103-df6b999c1c11
     capabilities:
         - voice
     environment:
@@ -13,7 +13,7 @@ instance:
         - name: DESTINATION_NUMBER
           value: +817023696361
         - name: ENABLE_DEBUG_ROUTES
-          value: "true"
+          value: "false"
     secrets:
         - ADMIN_API_KEY
     entrypoint:
@@ -21,7 +21,7 @@ instance:
         - index.js
 debug:
     name: debug
-    application-id: d8d0ad02-6a27-48f1-b5e8-5e40a699b8c8
+    application-id: 1dbf48c7-4ad4-4878-8103-df6b999c1c11
     capabilities:
         - voice
     environment:
@@ -30,7 +30,7 @@ debug:
         - name: DESTINATION_NUMBER
           value: +817023696361
         - name: ENABLE_DEBUG_ROUTES
-          value: "true"
+          value: "false"
     secrets:
         - ADMIN_API_KEY
     entrypoint:

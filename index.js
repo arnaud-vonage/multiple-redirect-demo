@@ -12,6 +12,7 @@ const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
 const DESTINATION_NUMBER = process.env.DESTINATION_NUMBER;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 const ENABLE_DEBUG_ROUTES = process.env.ENABLE_DEBUG_ROUTES === 'true';
+const debugLog = (...args) => { if (ENABLE_DEBUG_ROUTES) console.log(...args); };
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
 
 const normalizePhone = (value) => {
@@ -75,7 +76,7 @@ const VCR_APPLICATION_ID = process.env.VCR_APPLICATION_ID;
 const isValidVcrWebhook = (req) => {
     const token = getBearerToken(req);
     if (!token) {
-        console.log('[DEBUG] isValidVcrWebhook: No token in Authorization header');
+        debugLog('[DEBUG] isValidVcrWebhook: No token in Authorization header');
         return false;
     }
 
@@ -84,7 +85,7 @@ const isValidVcrWebhook = (req) => {
         if (!payloadB64) return false;
         const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
         const appIdMatch = !VCR_APPLICATION_ID || payload.api_application_id === VCR_APPLICATION_ID;
-        console.log(`[DEBUG] isValidVcrWebhook: api_application_id=${payload.api_application_id} match=${appIdMatch} (VCR_APPLICATION_ID=${VCR_APPLICATION_ID || 'not set'})`);
+        debugLog(`[DEBUG] isValidVcrWebhook: api_application_id=${payload.api_application_id} match=${appIdMatch} (VCR_APPLICATION_ID=${VCR_APPLICATION_ID || 'not set'})`);
         return appIdMatch;
     } catch {
         return false;
@@ -93,15 +94,15 @@ const isValidVcrWebhook = (req) => {
 
 const requireWebhookAuth = (req, res, next) => {
     const authHeader = req.get('authorization') || 'none';
-    console.log(`[DEBUG] requireWebhookAuth: Authorization present=${authHeader !== 'none'}`);
+    debugLog(`[DEBUG] requireWebhookAuth: Authorization present=${authHeader !== 'none'}`);
 
     if (isValidVcrWebhook(req)) {
-        console.log('[DEBUG] requireWebhookAuth: Passed VCR claim check');
+        debugLog('[DEBUG] requireWebhookAuth: Passed VCR claim check');
         next();
         return;
     }
 
-    console.log('[DEBUG] requireWebhookAuth: Auth failed, returning 401');
+    debugLog('[DEBUG] requireWebhookAuth: Auth failed, returning 401');
     res.status(401).json({ error: 'unauthorized' });
 };
 
@@ -264,18 +265,21 @@ app.use((req, res, next) => {
     const hasBearer = authScheme.toLowerCase() === 'bearer';
     const hasAdminHeader = Boolean(req.get('x-admin-api-key'));
 
+    const sanitizedQuery = { ...req.query };
+    if ('adminKey' in sanitizedQuery) sanitizedQuery.adminKey = '[REDACTED]';
+
     appendRecentEvent({
         type: 'incoming',
         method: req.method,
         path: req.path,
-        query: req.query,
+        query: sanitizedQuery,
         authScheme,
         hasBearer,
         hasAdminHeader,
         body: req.body
     });
 
-    console.log(`[INCOMING] ${req.method} ${req.path} | authScheme=${authScheme} | hasBearer=${hasBearer}`);
+    debugLog(`[INCOMING] ${req.method} ${req.path} | authScheme=${authScheme} | hasBearer=${hasBearer}`);
     next();
 });
 
@@ -287,19 +291,27 @@ app.get('/_/metrics', async (req, res) => {
     res.sendStatus(200);
 });
 
-app.get('/_/debug/recent-events', async (req, res) => {
+const requireDebugRoutes = (req, res, next) => {
+    if (!ENABLE_DEBUG_ROUTES) {
+        res.status(403).json({ error: 'debug routes are disabled' });
+        return;
+    }
+    next();
+};
+
+app.get('/_/debug/recent-events', requireDebugRoutes, async (req, res) => {
     requireAdminAuth(req, res, () => {
         res.json(getSanitizedRecentEvents());
     });
 });
 
-app.get('/_/debug/live-state', async (req, res) => {
+app.get('/_/debug/live-state', requireDebugRoutes, async (req, res) => {
     requireAdminAuth(req, res, () => {
         res.json(getSanitizedLiveState());
     });
 });
 
-app.get('/_/debug/live', async (req, res) => {
+app.get('/_/debug/live', requireDebugRoutes, async (req, res) => {
     let isAuthorized = false;
     requireAdminAuth(req, res, () => {
         isAuthorized = true;
@@ -382,17 +394,17 @@ app.delete('/_/mappings/:source', async (req, res) => {
 });
 
 app.post('/answer', async (req, res) => {
-    console.log('[DEBUG] /answer endpoint called');
+    debugLog('[DEBUG] /answer endpoint called');
     let isAuthorized = false;
     requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
     if (!isAuthorized) {
-        console.log('[DEBUG] /answer: Authorization failed, returning early');
+        debugLog('[DEBUG] /answer: Authorization failed, returning early');
         return;
     }
-    console.log('[DEBUG] /answer: Authorization passed');
+    debugLog('[DEBUG] /answer: Authorization passed');
 
     const { to, from, uuid, conversation_uuid: conversationUuid } = req.body;
     const normalizedTo = normalizePhone(to);
@@ -404,7 +416,7 @@ app.post('/answer', async (req, res) => {
     const dialFrom = toDialablePhone(outboundFrom);
     const routeSource = mappedOutboundFrom ? 'mapping' : 'default';
 
-    console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
+    debugLog(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
     appendRecentEvent({
         type: 'answer',
         normalizedTo,
@@ -463,21 +475,21 @@ app.post('/answer', async (req, res) => {
 });
 
 app.post('/event', async (req, res) => {
-    console.log('[DEBUG] /event endpoint called');
+    debugLog('[DEBUG] /event endpoint called');
     let isAuthorized = false;
     requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
     if (!isAuthorized) {
-        console.log('[DEBUG] /event: Authorization failed, returning early');
+        debugLog('[DEBUG] /event: Authorization failed, returning early');
         return;
     }
     
-    console.log('[DEBUG] /event: Authorization passed');
+    debugLog('[DEBUG] /event: Authorization passed');
 
     if (req.body?.status || req.body?.detail) {
-        console.log(`/event | status=${req.body.status} | detail=${req.body.detail || 'n/a'}`);
+        debugLog(`/event | status=${req.body.status} | detail=${req.body.detail || 'n/a'}`);
     }
     appendRecentEvent({
         type: 'event',

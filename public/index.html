@@ -424,13 +424,54 @@
 			liveStream.addEventListener('error', () => setConnectionState(false));
 		};
 
+		const checkDebugAccess = async () => {
+			const logsNavTab = document.querySelector('.nav-tab[data-tab="logs"]');
+			const logsTabPanel = document.getElementById('tab-logs');
+			try {
+				const response = await fetchAdmin('/_/debug/recent-events');
+				const enabled = response.ok;
+				if (logsNavTab) logsNavTab.style.display = enabled ? '' : 'none';
+				if (logsTabPanel && !enabled) logsTabPanel.style.display = 'none';
+			} catch {
+				if (logsNavTab) logsNavTab.style.display = 'none';
+				if (logsTabPanel) logsTabPanel.style.display = 'none';
+			}
+		};
+
 		adminAuthForm.addEventListener('submit', async (event) => {
 			event.preventDefault();
-			setAdminApiKey(adminApiKeyInput.value);
-			setAdminFeedback('接続中…', 'muted');
+			const enteredKey = adminApiKeyInput.value.trim();
+			if (!enteredKey) {
+				setAdminFeedback('APIキーを入力してください。', 'error-text');
+				return;
+			}
+			setAdminFeedback('確認中…', 'muted');
+			let validationResponse;
+			try {
+				const url = new URL('/_/mappings', window.location.origin);
+				url.searchParams.set('adminKey', enteredKey);
+				validationResponse = await fetch(url.toString(), {
+					headers: { 'x-admin-api-key': enteredKey }
+				});
+			} catch {
+				setAdminFeedback('サーバーへの接続に失敗しました。', 'error-text');
+				return;
+			}
+			if (validationResponse.status === 401) {
+				setAdminFeedback('APIキーが正しくありません。', 'error-text');
+				return;
+			}
+			if (!validationResponse.ok) {
+				setAdminFeedback(`エラー: ${validationResponse.status}`, 'error-text');
+				return;
+			}
+			setAdminApiKey(enteredKey);
+			setAdminFeedback('', 'muted');
+			const mappingData = await validationResponse.json().catch(() => null);
+			if (mappingData?.mappings) renderMappings(mappingData.mappings);
 			await loadInitialState();
-			await loadMappings();
 			subscribeLive();
+			await checkDebugAccess();
 		});
 
 		adminAuthLogoutBtn.addEventListener('click', () => {
@@ -495,6 +536,7 @@
 			loadInitialState();
 			loadMappings();
 			subscribeLive();
+			checkDebugAccess();
 		}
 	</script>
 </body>
