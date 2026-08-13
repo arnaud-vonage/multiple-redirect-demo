@@ -51,6 +51,19 @@ const getBearerToken = (req) => {
     return '';
 };
 
+const getJtiFromRequest = (req) => {
+    const token = getBearerToken(req);
+    if (!token) return null;
+    try {
+        const [, payloadB64] = token.split('.');
+        if (!payloadB64) return null;
+        const { jti } = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+        return jti || null;
+    } catch {
+        return null;
+    }
+};
+
 const requireAdminAuth = (req, res, next) => {
     if (!ADMIN_API_KEY) {
         res.status(503).json({ error: 'admin api is not configured' });
@@ -259,10 +272,9 @@ app.use((req, res, next) => {
         return;
     }
 
-    const authHeader = req.get('authorization') || '';
-    const authScheme = authHeader ? authHeader.split(' ')[0] : 'none';
-    const hasBearer = authScheme.toLowerCase() === 'bearer';
+    const jti = getJtiFromRequest(req);
     const hasAdminHeader = Boolean(req.get('x-admin-api-key'));
+    const authType = jti ? 'jwt' : (hasAdminHeader ? 'admin-key' : 'none');
 
     const sanitizedQuery = { ...req.query };
     if ('adminKey' in sanitizedQuery) sanitizedQuery.adminKey = '[REDACTED]';
@@ -272,13 +284,13 @@ app.use((req, res, next) => {
         method: req.method,
         path: req.path,
         query: sanitizedQuery,
-        authScheme,
-        hasBearer,
+        jti,
+        authType,
         hasAdminHeader,
         body: req.body
     });
 
-    console.log(`[INCOMING] ${req.method} ${req.path} | authScheme=${authScheme} | hasBearer=${hasBearer}`);
+    console.log(`[INCOMING] ${req.method} ${req.path} | jti=${jti || 'none'} | auth=${authType}`);
     next();
 });
 
@@ -408,7 +420,7 @@ app.post('/answer', async (req, res) => {
         const dialFrom = toDialablePhone(outboundFrom);
         const routeSource = mappedOutboundFrom ? 'mapping' : 'default';
 
-        console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
+        console.log(`/answer | uuid=${uuid || '-'} | cuid=${conversationUuid || '-'} | from=${maskPhone(normalizePhone(from))} | dialFrom=${dialFrom || '-'} | dialDest=${dialDestination || '-'} | route=${routeSource}`);
         appendRecentEvent({
             type: 'answer',
             normalizedTo,
@@ -464,6 +476,7 @@ app.post('/answer', async (req, res) => {
         }
 
         res.json(ncco);
+        console.log(`/answer | ncco sent | actions=${ncco.map(a => a.action).join(',')}`);
     } catch (err) {
         console.error('[ERROR] /answer handler threw:', err);
         if (!res.headersSent) {
@@ -487,14 +500,6 @@ app.post('/event', async (req, res) => {
     console.log('[DEBUG] /event: Authorization passed');
 
     try {
-        if (req.body?.status || req.body?.detail) {
-            console.log(`/event | status=${req.body.status} | detail=${req.body.detail || 'n/a'}`);
-        }
-        appendRecentEvent({
-            type: 'event',
-            body: req.body
-        });
-
         const {
             uuid,
             conversation_uuid: conversationUuid,
@@ -507,6 +512,14 @@ app.post('/event', async (req, res) => {
             disconnected_by: disconnectedBy,
             duration
         } = req.body;
+
+        if (status || detail) {
+            console.log(`/event | uuid=${uuid || '-'} | cuid=${conversationUuid || '-'} | status=${status || '-'} | detail=${detail || 'n/a'} | dir=${direction || '-'}`);
+        }
+        appendRecentEvent({
+            type: 'event',
+            body: req.body
+        });
 
         const callKey = conversationUuid || uuid || `event-${Date.now()}`;
         upsertCallRecord(callKey, {

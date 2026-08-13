@@ -11,9 +11,9 @@ instance:
         - name: ADMIN_API_KEY
           secret: ADMIN_API_KEY
         - name: DESTINATION_NUMBER
-          value: +8112345678
+          value: +817023696361
         - name: VONAGE_NUMBER
-          value: +1123456789
+          value: +18334282175
     secrets:
         - ADMIN_API_KEY
     entrypoint:
