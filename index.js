@@ -11,8 +11,7 @@ app.set('trust proxy', true);
 const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
 const DESTINATION_NUMBER = process.env.DESTINATION_NUMBER;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-const ENABLE_DEBUG_ROUTES = process.env.ENABLE_DEBUG_ROUTES === 'true';
-const debugLog = (...args) => { if (ENABLE_DEBUG_ROUTES) console.log(...args); };
+
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
 
 const normalizePhone = (value) => {
@@ -76,7 +75,7 @@ const VCR_APPLICATION_ID = process.env.VCR_APPLICATION_ID;
 const isValidVcrWebhook = (req) => {
     const token = getBearerToken(req);
     if (!token) {
-        debugLog('[DEBUG] isValidVcrWebhook: No token in Authorization header');
+        console.log('[DEBUG] isValidVcrWebhook: No token in Authorization header');
         return false;
     }
 
@@ -85,7 +84,7 @@ const isValidVcrWebhook = (req) => {
         if (!payloadB64) return false;
         const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
         const appIdMatch = !VCR_APPLICATION_ID || payload.api_application_id === VCR_APPLICATION_ID;
-        debugLog(`[DEBUG] isValidVcrWebhook: api_application_id=${payload.api_application_id} match=${appIdMatch} (VCR_APPLICATION_ID=${VCR_APPLICATION_ID || 'not set'})`);
+        console.log(`[DEBUG] isValidVcrWebhook: api_application_id=${payload.api_application_id} match=${appIdMatch} (VCR_APPLICATION_ID=${VCR_APPLICATION_ID || 'not set'})`);
         return appIdMatch;
     } catch {
         return false;
@@ -94,15 +93,15 @@ const isValidVcrWebhook = (req) => {
 
 const requireWebhookAuth = (req, res, next) => {
     const authHeader = req.get('authorization') || 'none';
-    debugLog(`[DEBUG] requireWebhookAuth: Authorization present=${authHeader !== 'none'}`);
+    console.log(`[DEBUG] requireWebhookAuth: Authorization present=${authHeader !== 'none'}`);
 
     if (isValidVcrWebhook(req)) {
-        debugLog('[DEBUG] requireWebhookAuth: Passed VCR claim check');
+        console.log('[DEBUG] requireWebhookAuth: Passed VCR claim check');
         next();
         return;
     }
 
-    debugLog('[DEBUG] requireWebhookAuth: Auth failed, returning 401');
+    console.log('[DEBUG] requireWebhookAuth: Auth failed, returning 401');
     res.status(401).json({ error: 'unauthorized' });
 };
 
@@ -279,7 +278,7 @@ app.use((req, res, next) => {
         body: req.body
     });
 
-    debugLog(`[INCOMING] ${req.method} ${req.path} | authScheme=${authScheme} | hasBearer=${hasBearer}`);
+    console.log(`[INCOMING] ${req.method} ${req.path} | authScheme=${authScheme} | hasBearer=${hasBearer}`);
     next();
 });
 
@@ -291,27 +290,19 @@ app.get('/_/metrics', async (req, res) => {
     res.sendStatus(200);
 });
 
-const requireDebugRoutes = (req, res, next) => {
-    if (!ENABLE_DEBUG_ROUTES) {
-        res.status(403).json({ error: 'debug routes are disabled' });
-        return;
-    }
-    next();
-};
-
-app.get('/_/debug/recent-events', requireDebugRoutes, async (req, res) => {
+app.get('/_/debug/recent-events', async (req, res) => {
     requireAdminAuth(req, res, () => {
         res.json(getSanitizedRecentEvents());
     });
 });
 
-app.get('/_/debug/live-state', requireDebugRoutes, async (req, res) => {
+app.get('/_/debug/live-state', async (req, res) => {
     requireAdminAuth(req, res, () => {
         res.json(getSanitizedLiveState());
     });
 });
 
-app.get('/_/debug/live', requireDebugRoutes, async (req, res) => {
+app.get('/_/debug/live', async (req, res) => {
     let isAuthorized = false;
     requireAdminAuth(req, res, () => {
         isAuthorized = true;
@@ -394,137 +385,151 @@ app.delete('/_/mappings/:source', async (req, res) => {
 });
 
 app.post('/answer', async (req, res) => {
-    debugLog('[DEBUG] /answer endpoint called');
+    console.log('[DEBUG] /answer endpoint called');
     let isAuthorized = false;
     requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
     if (!isAuthorized) {
-        debugLog('[DEBUG] /answer: Authorization failed, returning early');
+        console.log('[DEBUG] /answer: Authorization failed, returning early');
         return;
     }
-    debugLog('[DEBUG] /answer: Authorization passed');
+    console.log('[DEBUG] /answer: Authorization passed');
 
-    const { to, from, uuid, conversation_uuid: conversationUuid } = req.body;
-    const normalizedTo = normalizePhone(to);
-    const mappedOutboundFrom = numberMappings.get(normalizedTo);
-    const destination = normalizePhone(DESTINATION_NUMBER) || '';
-    const outboundFrom = mappedOutboundFrom || normalizePhone(VONAGE_NUMBER) || normalizedTo;
-    const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
-    const dialDestination = toDialablePhone(destination);
-    const dialFrom = toDialablePhone(outboundFrom);
-    const routeSource = mappedOutboundFrom ? 'mapping' : 'default';
+    try {
+        const { to, from, uuid, conversation_uuid: conversationUuid } = req.body;
+        const normalizedTo = normalizePhone(to);
+        const mappedOutboundFrom = numberMappings.get(normalizedTo);
+        const destination = normalizePhone(DESTINATION_NUMBER) || '';
+        const outboundFrom = mappedOutboundFrom || normalizePhone(VONAGE_NUMBER) || normalizedTo;
+        const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+        const dialDestination = toDialablePhone(destination);
+        const dialFrom = toDialablePhone(outboundFrom);
+        const routeSource = mappedOutboundFrom ? 'mapping' : 'default';
 
-    debugLog(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
-    appendRecentEvent({
-        type: 'answer',
-        normalizedTo,
-        destination,
-        dialDestination,
-        outboundFrom,
-        dialFrom,
-        routeSource,
-        body: req.body
-    });
+        console.log(`/answer | normalizedTo=${maskPhone(normalizedTo)} | destination=${maskPhone(destination)} | routeSource=${routeSource}`);
+        appendRecentEvent({
+            type: 'answer',
+            normalizedTo,
+            destination,
+            dialDestination,
+            outboundFrom,
+            dialFrom,
+            routeSource,
+            body: req.body
+        });
 
-    const callKey = conversationUuid || uuid || `answer-${Date.now()}`;
-    upsertCallRecord(callKey, {
-        callUuid: uuid || null,
-        conversationUuid: conversationUuid || null,
-        inboundFrom: normalizePhone(from),
-        inboundTo: normalizedTo,
-        destination,
-        dialDestination,
-        outboundFrom,
-        dialFrom,
-        routeSource,
-        status: 'answer_webhook',
-        detail: 'ncco_issued'
-    });
-    broadcastLiveUpdate();
+        const callKey = conversationUuid || uuid || `answer-${Date.now()}`;
+        upsertCallRecord(callKey, {
+            callUuid: uuid || null,
+            conversationUuid: conversationUuid || null,
+            inboundFrom: normalizePhone(from),
+            inboundTo: normalizedTo,
+            destination,
+            dialDestination,
+            outboundFrom,
+            dialFrom,
+            routeSource,
+            status: 'answer_webhook',
+            detail: 'ncco_issued'
+        });
+        broadcastLiveUpdate();
 
-    const ncco = [{
-        "action": "talk",
-        "text": "お電話ありがとうございます。ただいま担当者へおつなぎします。しばらくお待ちください。",
-        "language": "ja-JP",
-        "style": 0
-    }];
+        const ncco = [{
+            "action": "talk",
+            "text": "お電話ありがとうございます。ただいま担当者へおつなぎします。しばらくお待ちください。",
+            "language": "ja-JP",
+            "style": 0
+        }];
 
-    if (destination) {
-        const connectAction = {
-            "action": "connect",
-            "endpoint": [{
-                "type": "phone",
-                "number": dialDestination
-            }]
-            // eventUrl intentionally omitted — VCR's internal host header is not
-            // publicly reachable. Using the application's SDK-registered event URL instead.
-        };
+        if (destination) {
+            const connectAction = {
+                "action": "connect",
+                "endpoint": [{
+                    "type": "phone",
+                    "number": dialDestination
+                }]
+                // eventUrl intentionally omitted — VCR's internal host header is not
+                // publicly reachable. Using the application's SDK-registered event URL instead.
+            };
 
-        if (dialFrom) {
-            connectAction.from = dialFrom;
+            if (dialFrom) {
+                connectAction.from = dialFrom;
+            }
+
+            ncco.push(connectAction);
+        } else {
+            ncco[0].text = "We could not route your call at this time";
         }
 
-        ncco.push(connectAction);
-    } else {
-        ncco[0].text = "We could not route your call at this time";
+        res.json(ncco);
+    } catch (err) {
+        console.error('[ERROR] /answer handler threw:', err);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'internal server error' });
+        }
     }
-
-    res.json(ncco);
 });
 
 app.post('/event', async (req, res) => {
-    debugLog('[DEBUG] /event endpoint called');
+    console.log('[DEBUG] /event endpoint called');
     let isAuthorized = false;
     requireWebhookAuth(req, res, () => {
         isAuthorized = true;
     });
 
     if (!isAuthorized) {
-        debugLog('[DEBUG] /event: Authorization failed, returning early');
+        console.log('[DEBUG] /event: Authorization failed, returning early');
         return;
     }
     
-    debugLog('[DEBUG] /event: Authorization passed');
+    console.log('[DEBUG] /event: Authorization passed');
 
-    if (req.body?.status || req.body?.detail) {
-        debugLog(`/event | status=${req.body.status} | detail=${req.body.detail || 'n/a'}`);
+    try {
+        if (req.body?.status || req.body?.detail) {
+            console.log(`/event | status=${req.body.status} | detail=${req.body.detail || 'n/a'}`);
+        }
+        appendRecentEvent({
+            type: 'event',
+            body: req.body
+        });
+
+        const {
+            uuid,
+            conversation_uuid: conversationUuid,
+            from,
+            to,
+            status,
+            detail,
+            direction,
+            sip_code: sipCode,
+            disconnected_by: disconnectedBy,
+            duration
+        } = req.body;
+
+        const callKey = conversationUuid || uuid || `event-${Date.now()}`;
+        upsertCallRecord(callKey, {
+            callUuid: uuid || null,
+            conversationUuid: conversationUuid || null,
+            // Do not overwrite inboundFrom/inboundTo here — those are set from /answer
+            // and outbound leg events carry the 050/destination numbers in from/to.
+            status: status || 'event',
+            detail: detail || null,
+            direction: direction || null,
+            sipCode: sipCode || null,
+            disconnectedBy: disconnectedBy || null,
+            duration: duration || null
+        });
+        broadcastLiveUpdate();
+
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('[ERROR] /event handler threw:', err);
+        if (!res.headersSent) {
+            res.sendStatus(200);
+        }
     }
-    appendRecentEvent({
-        type: 'event',
-        body: req.body
-    });
-
-    const {
-        uuid,
-        conversation_uuid: conversationUuid,
-        from,
-        to,
-        status,
-        detail,
-        direction,
-        sip_code: sipCode,
-        disconnected_by: disconnectedBy,
-        duration
-    } = req.body;
-
-    const callKey = conversationUuid || uuid || `event-${Date.now()}`;
-    upsertCallRecord(callKey, {
-        callUuid: uuid || null,
-        conversationUuid: conversationUuid || null,
-        // Do not overwrite inboundFrom/inboundTo here — those are set from /answer
-        // and outbound leg events carry the 050/destination numbers in from/to.
-        status: status || 'event',
-        detail: detail || null,
-        direction: direction || null,
-        sipCode: sipCode || null,
-        disconnectedBy: disconnectedBy || null,
-        duration: duration || null
-    });
-    broadcastLiveUpdate();
-
-    res.sendStatus(200);
 });
 
 app.listen(port, () => {
