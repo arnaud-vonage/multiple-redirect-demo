@@ -12,8 +12,10 @@ instance:
           secret: ADMIN_API_KEY
         - name: DESTINATION_NUMBER
           value: +817023696361
-        - name: VONAGE_NUMBER
+        - name: DEFAULT_FROM_NUMBER
           value: +18334282175
+        - name: TALK_TEXT
+          value: お電話ありがとうございます。ただいま担当者へおつなぎします。しばらくお待ちください。
     secrets:
         - ADMIN_API_KEY
     entrypoint:
@@ -29,8 +31,10 @@ debug:
           secret: ADMIN_API_KEY
         - name: DESTINATION_NUMBER
           value: +817023696361
-        - name: VONAGE_NUMBER
+        - name: DEFAULT_FROM_NUMBER
           value: +18334282175
+        - name: TALK_TEXT
+          value: お電話ありがとうございます。ただいま担当者へおつなぎします。しばらくお待ちください。
     secrets:
         - ADMIN_API_KEY
     entrypoint:

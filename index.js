@@ -1,4 +1,4 @@
-import { vcr, Voice } from "@vonage/vcr-sdk";
+import { vcr, Voice, Scheduler } from "@vonage/vcr-sdk";
 import express from 'express';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -8,8 +8,9 @@ const port = process.env.VCR_PORT;
 // Required behind VCR reverse proxy so req.protocol reflects external HTTPS.
 app.set('trust proxy', true);
 
-const VONAGE_NUMBER = process.env.VONAGE_NUMBER;
+const DEFAULT_FROM_NUMBER = process.env.DEFAULT_FROM_NUMBER;
 const DESTINATION_NUMBER = process.env.DESTINATION_NUMBER;
+const TALK_TEXT = process.env.TALK_TEXT || 'お電話ありがとうございます。ただいま担当者へおつなぎします。しばらくお待ちください。';
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
 const mappingFile = new URL('./number-mapping.csv', import.meta.url);
@@ -262,6 +263,49 @@ const eventCallbackPath = 'event';
 await voice.onCall('answer');
 await voice.onCallEvent({ callback: eventCallbackPath });
 
+// Fixed ID makes re-registration a no-op — without it each cold start piles up a new schedule.
+const KEEP_WARM_SCHEDULE_ID = 'keep-warm';
+const KEEP_WARM_CALLBACK = '/keepWarm';
+const KEEP_WARM_CRON = '*/10 * * * *';
+const KEEP_WARM_MAX_INVOCATIONS = Math.ceil((365 * 24 * 60) / 10);
+
+const scheduler = new Scheduler(session);
+
+async function ensureKeepWarmSchedule() {
+    try {
+        const existing = await scheduler.get(KEEP_WARM_SCHEDULE_ID);
+        if (existing?.id) {
+            console.log(`Keep-warm schedule already exists: ${existing.id}`);
+            return existing.id;
+        }
+    } catch {
+        // get() rejects when the ID is unknown — fall through to create it
+    }
+
+    const untilDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+    try {
+        const scheduleId = await scheduler.startAt({
+            id: KEEP_WARM_SCHEDULE_ID,
+            startAt: new Date().toISOString(),
+            callback: KEEP_WARM_CALLBACK,
+            interval: {
+                cron: KEEP_WARM_CRON,
+                until: {
+                    date: untilDate,
+                    maxInvocations: KEEP_WARM_MAX_INVOCATIONS,
+                },
+            },
+            payload: { reason: 'keep-warm' },
+        });
+        console.log(`Keep-warm schedule created: ${scheduleId}`);
+        return scheduleId;
+    } catch (error) {
+        console.error('Failed to create keep-warm schedule:', error);
+        return null;
+    }
+}
+
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -299,6 +343,11 @@ app.get('/_/health', async (req, res) => {
 });
 
 app.get('/_/metrics', async (req, res) => {
+    res.sendStatus(200);
+});
+
+app.post(KEEP_WARM_CALLBACK, (req, res) => {
+    console.log(`Keep-warm ping at ${new Date().toISOString()}`);
     res.sendStatus(200);
 });
 
@@ -414,7 +463,7 @@ app.post('/answer', async (req, res) => {
         const normalizedTo = normalizePhone(to);
         const mappedOutboundFrom = numberMappings.get(normalizedTo);
         const destination = normalizePhone(DESTINATION_NUMBER) || '';
-        const outboundFrom = mappedOutboundFrom || normalizePhone(VONAGE_NUMBER) || normalizedTo;
+        const outboundFrom = mappedOutboundFrom || normalizePhone(DEFAULT_FROM_NUMBER) || normalizedTo;
         const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
         const dialDestination = toDialablePhone(destination);
         const dialFrom = toDialablePhone(outboundFrom);
@@ -450,7 +499,7 @@ app.post('/answer', async (req, res) => {
 
         const ncco = [{
             "action": "talk",
-            "text": "お電話ありがとうございます。ただいま担当者へおつなぎします。しばらくお待ちください。",
+            "text": TALK_TEXT,
             "language": "ja-JP",
             "style": 0
         }];
@@ -548,3 +597,5 @@ app.post('/event', async (req, res) => {
 app.listen(port, () => {
     console.log(`App listening on port ${port}`)
 });
+
+ensureKeepWarmSchedule();
