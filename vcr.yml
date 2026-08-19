@@ -3,6 +3,8 @@ project:
 instance:
     name: dev
     runtime: nodejs22
+    scaling:
+        min-scale: 0
     region: aws.apse1
     application-id: 1dbf48c7-4ad4-4878-8103-df6b999c1c11
     capabilities:
